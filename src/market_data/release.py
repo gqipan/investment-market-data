@@ -118,6 +118,13 @@ def _validate_source_for_build(source: dict[str, Any]) -> None:
         raise ValueError("source is restricted and cannot enter the pipeline")
 
 
+def _private_capability(source: dict[str, Any], name: str) -> bool:
+    private_name = f"private_{name}"
+    if private_name in source:
+        return source.get(private_name) is True
+    return source.get(name) is True
+
+
 def build_candidate(
     *,
     root: Path,
@@ -242,7 +249,12 @@ def build_candidate(
             "generated_at": generated_at,
             "data_class": dataset["data_class"],
             "calendar_source_id": calendar_source_id,
-            "private_release_eligible": all(s.get("private_release_allowed") is True for s in (source, calendar_source)),
+            "private_release_eligible": all(
+                s.get("private_release_allowed") is True
+                and _private_capability(s, "cloud_collection_allowed")
+                and _private_capability(s, "cloud_storage_allowed")
+                for s in (source, calendar_source)
+            ),
             "publication_eligible": all(s.get("public_release_allowed") is True for s in (source, calendar_source)),
             "source": {
                 "id": source_id,
@@ -525,9 +537,9 @@ def assert_release_allowed(root: Path, release_dir: Path, scope: str) -> None:
             )
         if source.get("private_release_allowed") is not True:
             raise ValueError("release is blocked: private release is not approved")
-        if source.get("cloud_collection_allowed") is not True:
+        if not _private_capability(source, "cloud_collection_allowed"):
             raise ValueError("release is blocked: cloud collection is not approved")
-        if source.get("cloud_storage_allowed") is not True:
+        if not _private_capability(source, "cloud_storage_allowed"):
             raise ValueError("release is blocked: private cloud storage is not approved")
         _assert_calendar_allowed(calendar_source, scope)
         check_code_commit(root, release_manifest["code_commit"])
@@ -555,10 +567,15 @@ def assert_release_allowed(root: Path, release_dir: Path, scope: str) -> None:
 
 def _assert_calendar_allowed(source: dict, scope: str) -> None:
     statuses = {"approved_private", "approved_public"} if scope == "private" else {"approved_public"}
-    keys = (f"{scope}_release_allowed", "cloud_collection_allowed", "cloud_storage_allowed")
+    keys = (f"{scope}_release_allowed",)
     if scope == "public":
-        keys += ("redistribution_allowed",)
+        keys += ("cloud_collection_allowed", "cloud_storage_allowed", "redistribution_allowed")
     if source.get("status") not in statuses or any(source.get(key) is not True for key in keys):
+        raise ValueError(f"release is blocked: calendar source is not approved for {scope} release")
+    if scope == "private" and not (
+        _private_capability(source, "cloud_collection_allowed")
+        and _private_capability(source, "cloud_storage_allowed")
+    ):
         raise ValueError(f"release is blocked: calendar source is not approved for {scope} release")
 
 

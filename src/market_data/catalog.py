@@ -25,6 +25,8 @@ PERMISSION_KEYS = (
     "cloud_collection_allowed",
     "cloud_storage_allowed",
     "redistribution_allowed",
+    "private_cloud_collection_allowed",
+    "private_cloud_storage_allowed",
 )
 VALUATION_FIELDS = {"Date", "Metric", "Value", "Unit", "Method"}
 
@@ -124,7 +126,7 @@ def validate_catalog(root: Path) -> dict[str, int]:
         if status not in SOURCE_STATUSES:
             raise ValueError(f"source {source_id} has unknown status: {status}")
         for key in PERMISSION_KEYS:
-            if not isinstance(source.get(key), bool):
+            if key in source and not isinstance(source.get(key), bool):
                 raise ValueError(f"source {source_id}.{key} must be boolean")
         usage_url = source.get("usage_url")
         if usage_url is not None and not isinstance(usage_url, str):
