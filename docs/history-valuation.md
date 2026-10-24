@@ -48,7 +48,7 @@ PYTHONPATH=src python -m market_data verify-valuation \
   --snapshot data/local/history-run/000300/akshare_legulegu
 ```
 
-独立收盘价可调用 `market_data.history.verify_close_history` 复验哈希、身份、日期与覆盖。估值和收盘价独立schema尚无正式Release打包/下载支持，不把OHLCV消费者描述成已支持它们。
+独立收盘价可调用 `market_data.history.verify_close_history` 复验哈希、身份、日期与覆盖。`build-snapshot-release`、`verify-release`、`stage-snapshot-release` 和 `fetch-snapshot-release` 已支持 `normalized_close` 与 `valuation_observation`。它们使用 schema 1.3，不进入现有 OHLCV 消费器。真实来源当前没有云端保存和再分发许可，因此这些命令可以做本地候选和验算，但不能生成可供自动同步的正式真实 Release。
 
 ## 2026-10-24 实测覆盖
 
@@ -76,4 +76,4 @@ PYTHONPATH=src python -m market_data verify-valuation \
 
 ## 接入顺序
 
-先补齐来源与缺口，并冻结方法、频率和数据质量；再给独立估值与close schema实现正式版本包。私人应用主动读取固定版本到独立缓存，研究端只读，估值按截至研究日可见的观测对齐，展示原始频率与陈旧程度，不冒用未来数据或公开日期未知的回填历史。当前不写私人数据库、生产指标缓存或有效版本指针，不启用自动同步。
+固定版本包已经实现。下一步是补齐来源许可和数据缺口，并继续冻结方法、频率与质量门槛。许可开启前，私人应用只读取经过审阅的本地快照；许可开启后，再由私人应用主动拉取不可变 Release 到独立缓存。研究端保持只读，估值按截至研究日可见的观测对齐，展示原始频率与陈旧程度，不冒用未来数据或公开日期未知的回填历史。当前不写私人数据库、生产指标缓存或有效版本指针，不启用自动同步。

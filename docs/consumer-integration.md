@@ -4,7 +4,12 @@
 
 数据仓库发布经过批准的市场数据；私人应用只向数据仓库读取固定版本。私人应用的账本、关注原因、账户、持仓、净值、数据库、报告和凭据不得回传或由数据仓库工作流检出。两边不共享业务数据库，不在网页请求期间同步下载全历史数据。
 
-已实现 `stage-release`、`fetch-release` 和 `shadow-check`：下载指定不可变公开 Release，校验调用方锁定的清单哈希和数据集 ID，安装独立缓存，再只读对照固定版本。尚未部署生产定时下载、自动切换版本或估值导入，也未改动私人应用代码或生产环境。
+已实现两类固定版本消费契约：
+
+- `stage-release` / `fetch-release`：完整 OHLCV，并生成现有研究 CLI 需要的 `market=A` 适配缓存。
+- `stage-snapshot-release` / `fetch-snapshot-release`：独立收盘价和估值观测，保留原始 schema、单位、方法与频率。
+
+下载器按调用方锁定的不可变 tag、清单哈希、数据集 ID 和数据类型复验，再安装独立缓存。`shadow-check` 只读比较固定行情版本。公开仓库尚未部署生产定时下载或自动切换；私人系统已有本地只读桥接实现，业务数据库、线上页面和生产指针均未切换。
 
 ## 第一阶段：离线研究读取器
 
@@ -19,7 +24,7 @@
 
 正式消费方配置至少锁定 `release_id`、`release_manifest_sha256` 和 `dataset_id`。这些值应来自审阅通过的版本登记，不从刚下载的、不可信清单自行生成后当成信任依据。消费端无需向数据仓库提交自己的缓存位置或研究配置。
 
-已下载完整数据包后：
+完整 OHLCV 已下载后：
 
 ```bash
 PYTHONPATH=src python -m market_data stage-release \
@@ -40,11 +45,24 @@ PYTHONPATH=src python -m market_data stage-release \
 
 消费端会验证包内白名单、哈希、内容身份、来源、交易日、行数和日期，然后原子安装到新目录。同一版本重跑会核对期望的派生身份后复用；缓存自洽但与固定上游内容不符时也拒绝。失败不覆盖旧版本、不修改 `current.json`、不导入数据库。研究报告应同时记录源身份与消费身份。
 
+独立收盘价和估值的本地 Release 安装：
+
+```bash
+PYTHONPATH=src python -m market_data stage-snapshot-release \
+  --release-dir "$RELEASE_DIR" \
+  --manifest-sha256 "$RELEASE_MANIFEST_SHA256" \
+  --dataset-id "$DATASET_ID" \
+  --data-class normalized_close \
+  --cache-dir "$MARKET_DATA_CACHE"
+```
+
+`--data-class` 必须与调用方登记的 `normalized_close` 或 `valuation_observation` 一致。缓存目录以清单 SHA-256 命名，读取时复验数据集身份，不创建 `current.json`。估值读取仍须明确 PE/PB 方法、来源和截至日，不能因为文件可读就宣称日频历史或当时可得。
+
 合成样例默认拒绝，CI 冒烟测试须显式传 `--allow-synthetic`。它不能作为正式研究输入或真实行情发布。
 
 ## 第二阶段：下载与生产影子验证
 
-固定版本包路线已选定。未来正式数据获准发布后，在私人应用侧编排后台下载任务：
+固定版本包路线已选定。正式数据获准发布后，在私人应用侧编排后台下载任务：
 
 1. 使用只读凭据读取指定仓库和固定 tag；私有仓库需要认证，公开包可以匿名读取。凭据只放消费端环境，不写进 URL、manifest 或公共仓库。
 2. 下载到临时目录，检查大小与完整性，调用 `stage-release`，禁止使用漂移的 Latest 链接作为研究输入。
@@ -53,7 +71,7 @@ PYTHONPATH=src python -m market_data stage-release \
 5. 连续五个交易日只读对照现有行情、单位、缺日和指标结果；验证源站断网、半包、过期、撤回、缓存损坏和回退。
 6. 只有验收通过后，才在私人应用侧原子切换“有效版本”指针；单个后台任务负责切换，网页请求只读已经生效的缓存。失败沿用上一有效版本并显示数据状态。
 
-`stage-release` 本身不联网；`fetch-release` 提供匿名下载组件，但不刷新凭据、不运行后台任务、不切换指针。私人系统的任务注册、缓存适配与指针管理仍需另外实施，不能把命令描述成已部署的网页或自动同步服务。
+`stage-release` 与 `stage-snapshot-release` 本身不联网；两个 `fetch-*` 命令提供匿名下载组件，但不刷新凭据、不运行后台任务、不切换指针。私人系统的任务注册、缓存适配与指针管理仍需另外实施，不能把命令描述成已部署的网页或自动同步服务。
 
 指定版本下载命令（当前没有正式真实行情 Release，下例需使用审阅通过的实际登记值）：
 
@@ -63,6 +81,18 @@ PYTHONPATH=src python -m market_data fetch-release \
   --release-id "$RELEASE_ID" \
   --manifest-sha256 "$RELEASE_MANIFEST_SHA256" \
   --dataset-id "$DATASET_ID" --cache-dir "$MARKET_DATA_CACHE"
+```
+
+估值或独立收盘价的远程固定版本：
+
+```bash
+PYTHONPATH=src python -m market_data fetch-snapshot-release \
+  --repository gqipan/investment-market-data \
+  --release-id "$RELEASE_ID" \
+  --manifest-sha256 "$RELEASE_MANIFEST_SHA256" \
+  --dataset-id "$DATASET_ID" \
+  --data-class valuation_observation \
+  --cache-dir "$MARKET_DATA_CACHE"
 ```
 
 [GitHub Release API](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) 提供固定 tag 和不可变标记。下载器只接受正式、不可变 Release；拒绝草稿、预发布、跨仓库资产、额外文件、错误尺寸和哈希。固定清单须允许公开消费；合成数据只能显式用于冒烟。HTTPS 和重定向仅允许 GitHub 资产域名，连接超时 20 秒，不发送任何认证头。元数据各限 1 MiB，压缩包限 50 MiB。下载失败不创建新消费版本，不回退到 Latest、其他来源或合成 artifact。私人 Release 认证暂不支持。
@@ -88,9 +118,9 @@ GitHub Actions 的 synthetic artifact 只用于验证传输、打包和消费契
 
 ## 第三阶段：估值与应用指标
 
-估值必须另建观测数据集，明确 PE 的 TTM/静态、整体法/中位数、PB 方法和股息率单位。保留发布方和来源日期，禁止从行情推导原始 PE/PB 或把缺失补零。
+估值使用独立观测数据集，明确 PE 的 TTM/静态、整体法/中位数、PB 方法和股息率单位。保留发布方和来源日期，禁止从行情推导原始 PE/PB 或把缺失补零。
 
-应用中的估值历史、分位数和展示缓存需单独设计导入契约。原始观测与应用派生指标分开保存；不得为接入新市场数据重算或写入私人持仓、交易、现金流、每日盈亏及资产净值。本地采集已提供独立估值观测与验算；尚未实现正式估值版本包或私人应用导入。月度PE/PB、蛋卷快照及可选中证api_peg方法必须分别路由，不把整段历史补成每日。收盘价close-history-local-1也不能交给现有OHLCV消费器；详见[历史与估值](history-valuation.md)。
+应用中的估值历史、分位数和展示缓存需单独设计业务导入契约。原始观测与应用派生指标分开保存；不得为接入新市场数据重算或写入私人持仓、交易、现金流、每日盈亏及资产净值。Release 和独立研究缓存已经实现，私人业务导入仍未启用。月度 PE/PB、蛋卷快照及可选中证 api_peg 方法必须分别路由，不把整段历史补成每日。收盘价 `normalized_close` 也不能交给现有 OHLCV 消费器；详见[历史与估值](history-valuation.md)。
 
 ## GitHub 验收
 

@@ -38,6 +38,16 @@ def _detect_commit(root: Path) -> str:
     return result.stdout.strip() or "local-uncommitted"
 
 
+def _release_schema(release_dir: Path) -> str:
+    manifest = json.loads(
+        (release_dir / "release-manifest.json").read_text(encoding="utf-8")
+    )
+    schema = manifest.get("schema_version")
+    if not isinstance(schema, str):
+        raise ValueError("release manifest has no schema version")
+    return schema
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="market-data")
     subcommands = parser.add_subparsers(dest="command", required=True)
@@ -71,6 +81,20 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument("--cache-dir", required=True, type=Path)
     stage.add_argument("--allow-synthetic", action="store_true", help="explicit smoke-test use only")
 
+    stage_snapshot = subcommands.add_parser(
+        "stage-snapshot-release",
+        help="verify and install a pinned close-history or valuation release",
+    )
+    stage_snapshot.add_argument("--release-dir", required=True, type=Path)
+    stage_snapshot.add_argument("--manifest-sha256", required=True)
+    stage_snapshot.add_argument("--dataset-id", required=True)
+    stage_snapshot.add_argument(
+        "--data-class",
+        required=True,
+        choices=("normalized_close", "valuation_observation"),
+    )
+    stage_snapshot.add_argument("--cache-dir", required=True, type=Path)
+
     fetch = subcommands.add_parser("fetch-release", help="download a caller-pinned immutable public GitHub release")
     fetch.add_argument("--repository", required=True)
     fetch.add_argument("--release-id", required=True)
@@ -78,6 +102,21 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--dataset-id", required=True)
     fetch.add_argument("--cache-dir", required=True, type=Path)
     fetch.add_argument("--allow-synthetic", action="store_true", help="explicit smoke-test use only")
+
+    fetch_snapshot = subcommands.add_parser(
+        "fetch-snapshot-release",
+        help="download a caller-pinned close-history or valuation GitHub release",
+    )
+    fetch_snapshot.add_argument("--repository", required=True)
+    fetch_snapshot.add_argument("--release-id", required=True)
+    fetch_snapshot.add_argument("--manifest-sha256", required=True)
+    fetch_snapshot.add_argument("--dataset-id", required=True)
+    fetch_snapshot.add_argument(
+        "--data-class",
+        required=True,
+        choices=("normalized_close", "valuation_observation"),
+    )
+    fetch_snapshot.add_argument("--cache-dir", required=True, type=Path)
 
     shadow = subcommands.add_parser("shadow-check", help="compare pinned research caches without switching production")
     shadow.add_argument("--candidate", required=True, type=Path)
@@ -110,6 +149,19 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--generated-at")
     build.add_argument("--code-commit")
     build.add_argument("--snapshot", type=Path, help="verified local collection snapshot")
+
+    build_snapshot = subcommands.add_parser(
+        "build-snapshot-release",
+        help="build a deterministic close-history or valuation release",
+    )
+    build_snapshot.add_argument("--root", type=Path, default=_default_root())
+    build_snapshot.add_argument("--dataset", required=True)
+    build_snapshot.add_argument("--snapshot", required=True, type=Path)
+    build_snapshot.add_argument("--as-of", required=True)
+    build_snapshot.add_argument("--revision", type=int, default=1)
+    build_snapshot.add_argument("--output", required=True, type=Path)
+    build_snapshot.add_argument("--generated-at")
+    build_snapshot.add_argument("--code-commit")
 
     verify = subcommands.add_parser("verify-release", help="verify checksums and bundle contents")
     verify.add_argument("--release-dir", type=Path, required=True)
@@ -161,11 +213,33 @@ def _run(args: argparse.Namespace) -> int:
             cache_dir=args.cache_dir, allow_synthetic=args.allow_synthetic)
         print(output)
         return 0
+    if args.command == "stage-snapshot-release":
+        from .general_release import stage_snapshot_release
+        output = stage_snapshot_release(
+            release_dir=args.release_dir,
+            expected_manifest_sha256=args.manifest_sha256,
+            expected_dataset_id=args.dataset_id,
+            expected_data_class=args.data_class,
+            cache_dir=args.cache_dir,
+        )
+        print(output)
+        return 0
     if args.command == "fetch-release":
         from .transport import fetch_release
         print(fetch_release(repository=args.repository, release_id=args.release_id,
             expected_manifest_sha256=args.manifest_sha256, expected_dataset_id=args.dataset_id,
             cache_dir=args.cache_dir, allow_synthetic=args.allow_synthetic))
+        return 0
+    if args.command == "fetch-snapshot-release":
+        from .transport import fetch_snapshot_release
+        print(fetch_snapshot_release(
+            repository=args.repository,
+            release_id=args.release_id,
+            expected_manifest_sha256=args.manifest_sha256,
+            expected_dataset_id=args.dataset_id,
+            expected_data_class=args.data_class,
+            cache_dir=args.cache_dir,
+        ))
         return 0
     if args.command == "shadow-check":
         from .shadow import compare_shadow
@@ -235,12 +309,36 @@ def _run(args: argparse.Namespace) -> int:
         )
         print(release_dir)
         return 0
+    if args.command == "build-snapshot-release":
+        from .general_release import build_snapshot_candidate
+        release_dir = build_snapshot_candidate(
+            root=args.root.resolve(),
+            dataset_name=args.dataset,
+            snapshot_dir=args.snapshot.resolve(),
+            as_of=args.as_of,
+            revision=args.revision,
+            output_dir=args.output.resolve(),
+            generated_at=args.generated_at,
+            code_commit=args.code_commit or _detect_commit(args.root.resolve()),
+        )
+        print(release_dir)
+        return 0
     if args.command == "verify-release":
-        manifest = verify_release(args.release_dir.resolve())
+        if _release_schema(args.release_dir.resolve()) == "1.3":
+            from .general_release import verify_snapshot_release
+            manifest = verify_snapshot_release(args.release_dir.resolve())
+        else:
+            manifest = verify_release(args.release_dir.resolve())
         print(f"verified {manifest['release_id']}")
         return 0
     if args.command == "release-check":
-        assert_release_allowed(args.root.resolve(), args.release_dir.resolve(), args.scope)
+        if _release_schema(args.release_dir.resolve()) == "1.3":
+            from .general_release import assert_snapshot_release_allowed
+            assert_snapshot_release_allowed(
+                args.root.resolve(), args.release_dir.resolve(), args.scope
+            )
+        else:
+            assert_release_allowed(args.root.resolve(), args.release_dir.resolve(), args.scope)
         print(f"{args.scope} release gate passed")
         return 0
     raise AssertionError(f"unhandled command: {args.command}")
