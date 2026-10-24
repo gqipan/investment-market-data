@@ -31,3 +31,7 @@
 来源不可达、缺日、错误哈希、过期、撤回或缓存损坏时拒绝新版本，继续保留上一有效版本；不自动换源、补零或拼接历史。正式数据发布前还需核对差异报告与当前来源权限。
 
 代码 clone 不包含 Release 附件。正式使用后，独立归档需保存 commit、Release 清单、SHA256SUMS、数据包和撤回登记，并定期从归档恢复、重新验算。网页只读已经生效的缓存，不能在请求期间下载全历史数据。
+
+## 固定版本消费组件验收
+
+提交 `c91a72c` 的本地 75 项测试、隐私／文件白名单和 catalog 校验、独立复核均通过。[push 运行](https://github.com/gqipan/investment-market-data/actions/runs/40056876144) 与 [PR 运行](https://github.com/gqipan/investment-market-data/actions/runs/40056924355) 均成功。真实六日缓存经 shadow-check 返回历史不足和禁止晋级；指定不存在的正式行情 Release 时联网预检失败，旧指针保持不变。组件没有注册或部署私人系统定时任务。
