@@ -35,3 +35,7 @@
 ## 固定版本消费组件验收
 
 提交 `c91a72c` 的本地 75 项测试、隐私／文件白名单和 catalog 校验、独立复核均通过。[push 运行](https://github.com/gqipan/investment-market-data/actions/runs/40056876144) 与 [PR 运行](https://github.com/gqipan/investment-market-data/actions/runs/40056924355) 均成功。真实六日缓存经 shadow-check 返回历史不足和禁止晋级；指定不存在的正式行情 Release 时联网预检失败，旧指针保持不变。组件没有注册或部署私人系统定时任务。
+
+## 历史与估值组件远程验收
+
+提交`7b596df`已通过[push校验](https://github.com/gqipan/investment-market-data/actions/runs/40079590941)与[PR校验](https://github.com/gqipan/investment-market-data/actions/runs/40079633665)，见[PR #2](https://github.com/gqipan/investment-market-data/pull/2)。95项测试、隐私、目录和合成消费契约均成功；独立复核问题已关闭。真实回补结果保持本地partial，没有发布真实数据或修改私人应用。
