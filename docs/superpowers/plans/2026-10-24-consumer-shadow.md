@@ -16,6 +16,6 @@ No private files, credentials, database access, pointer updates, source permissi
 - [x] Observe failures, then implement src/market_data/transport.py with fetch_release(repository, release_id, expected_manifest_sha256, expected_dataset_id, cache_dir), bounded read_https and restricted redirects; invoke stage_release only after complete verified download.
 - [x] Add tests/test_shadow.py: matched real cache, six-session history rejection, mismatched metadata, damaged pins/content, stale dates, missing overlap and numeric differences. Observe failures, then implement compare_shadow(candidate, baseline, candidate_manifest_sha256, baseline_manifest_sha256, expected_session, minimum_sessions=900, relative_tolerance=0).
 - [x] Extend CLI with fetch-release and shadow-check; shadow emits JSON to stdout, nonpassing comparison exits 1 and malformed input exits 2. Update consumer-integration.md with exact commands and remaining deployment gates.
-- [ ] Run full unittest, privacy/catalog checks, CLI smoke tests and independent review; push branch, create PR and wait for GitHub checks. Record the separately started main workflow run.
+- [x] Run full unittest, privacy/catalog checks, CLI smoke tests and independent review; push branch, create PR and wait for GitHub checks. Record the separately started main workflow run.
 
 No integration into production in this branch. Existing scheduled check is started independently of feature implementation.
