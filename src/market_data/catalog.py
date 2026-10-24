@@ -26,12 +26,24 @@ PERMISSION_KEYS = (
     "cloud_storage_allowed",
     "redistribution_allowed",
 )
+VALUATION_FIELDS = {"Date", "Metric", "Value", "Unit", "Method"}
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _load_object(root: Path, relative: str) -> dict[str, Any]:
     path = root / relative
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(
+            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_object
+        )
     except FileNotFoundError as exc:
         raise ValueError(f"missing catalog file: {relative}") from exc
     except json.JSONDecodeError as exc:
@@ -154,9 +166,9 @@ def validate_catalog(root: Path) -> dict[str, int]:
                 raise ValueError(
                     f"valuation dataset {dataset_id} must declare non-empty fields"
                 )
-            if "trade_date" not in fields:
+            if set(fields) != VALUATION_FIELDS:
                 raise ValueError(
-                    f"valuation dataset {dataset_id} fields must include trade_date"
+                    f"valuation dataset {dataset_id} must use the normalized observation fields"
                 )
         if bars_file is not None:
             _relative_data_file(root, bars_file)

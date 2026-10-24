@@ -39,6 +39,7 @@ class CollectionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'not explicitly registered'):
                 collection.collect_index(root=ROOT, dataset_name='dividend-low-vol-100-price-v1',
                     start='2026-10-19', end='2026-10-20', output=Path(temp)/'snapshot',
+                    provider='tencent_raw',
                     request=lambda *_: self.fail('unsupported mapping reached network'))
 
     def test_calendar_cloud_permissions_are_independent(self):
