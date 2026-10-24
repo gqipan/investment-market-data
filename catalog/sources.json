@@ -55,36 +55,42 @@
     "notes": "No data license or redistribution grant was found. Do not copy this repository's CSV into a release."
   },
   "tencent_raw": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
     "usage_url": "https://gu.qq.com/",
     "checked_at": "2026-10-24",
     "volume_unit": "tencent_lots",
-    "notes": "Local research collection is enabled. Cloud collection, storage and redistribution are reviewed separately. Index publisher identity does not select the transport endpoint."
+    "notes": "Operator approves collection and storage only in the owner-controlled private cache. Public release and redistribution remain disabled. Index publisher identity does not select the transport endpoint."
   },
   "akshare_eastmoney": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
     "usage_url": "https://quote.eastmoney.com/center/hszs.html",
     "checked_at": "2026-10-24",
     "volume_unit": "eastmoney_lots",
-    "notes": "Local research collection is enabled. Cloud collection, storage and redistribution are reviewed separately. Index publisher identity does not select the transport endpoint."
+    "notes": "Operator approves collection and storage only in the owner-controlled private cache. Public release and redistribution remain disabled. Index publisher identity does not select the transport endpoint."
   },
   "szse_calendar": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
@@ -93,10 +99,12 @@
     "notes": "Independent monthly trading calendar. Local research access is enabled; calendar cloud collection, storage and redistribution require separate approval from the price provider."
   },
   "akshare_legulegu": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
@@ -105,10 +113,12 @@
     "notes": "Local research access only. Actual frequency and methods are validated per snapshot. No cloud storage or redistribution approval."
   },
   "danjuan_snapshot": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
@@ -117,15 +127,17 @@
     "notes": "Local research access only. Actual frequency and methods are validated per snapshot. No cloud storage or redistribution approval."
   },
   "csindex_optional_history": {
-    "status": "pending_authorization",
+    "status": "approved_private",
     "local_collection_allowed": true,
-    "private_release_allowed": false,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
     "usage_url": "https://www.csindex.com.cn/csindex-home/perf/index-perf",
     "checked_at": "2026-10-24",
-    "notes": "Explicit optional source, never default or silent fallback. API peg retained as pe_csindex_reported/api_peg rather than relabeled Legu TTM. Local research only; cloud and redistribution disabled."
+    "notes": "Explicit optional source, never default or silent fallback. API peg retained as pe_csindex_reported/api_peg rather than relabeled Legu TTM. Operator approves owner-controlled private storage only; public release and redistribution remain disabled."
   }
 }
