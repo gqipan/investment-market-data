@@ -11,6 +11,7 @@ import unittest
 
 from market_data.privacy import scan_privacy
 from market_data.release import build_candidate, verify_release, assert_release_allowed
+from market_data.provenance import check_repository_files
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -211,3 +212,14 @@ class HardeningTests(unittest.TestCase):
         target.mkdir()
         (target/'note.md').symlink_to(self.root/'catalog/sources.json')
         self.assertTrue(scan_privacy(target))
+
+    def test_python_build_artifacts_stay_outside_publication_scan(self):
+        (self.root/'.gitignore').write_text('build/\n*.egg-info/\n', encoding='utf-8')
+        subprocess.run(['git','-C',str(self.root),'add','.gitignore'], check=True, capture_output=True)
+        subprocess.run(['git','-C',str(self.root),'-c','user.name=Test','-c',
+            'user.email=test@example.invalid','commit','-qm','ignore build artifacts'], check=True, capture_output=True)
+        (self.root/'build/lib/market_data').mkdir(parents=True)
+        (self.root/'build/lib/market_data/__init__.py').write_text('', encoding='utf-8')
+        (self.root/'src/investment_market_data.egg-info').mkdir(parents=True)
+        (self.root/'src/investment_market_data.egg-info/PKG-INFO').write_text('Name: demo\n', encoding='utf-8')
+        check_repository_files(self.root)
