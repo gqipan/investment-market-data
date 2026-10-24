@@ -162,6 +162,51 @@ class GeneralReleaseTests(unittest.TestCase):
         )
         assert_snapshot_release_allowed(self.root, release, "private")
 
+    def test_private_cloud_permissions_do_not_grant_public_release(self) -> None:
+        sources_path = self.root / "catalog" / "sources.json"
+        sources = json.loads(sources_path.read_text(encoding="utf-8"))
+        for source_id in ("tencent_raw", "szse_calendar"):
+            sources[source_id].update(
+                status="approved_private",
+                private_release_allowed=True,
+                public_release_allowed=False,
+                private_cloud_collection_allowed=True,
+                private_cloud_storage_allowed=True,
+                cloud_collection_allowed=False,
+                cloud_storage_allowed=False,
+                redistribution_allowed=False,
+            )
+        sources_path.write_text(json.dumps(sources), encoding="utf-8")
+        subprocess.run(
+            ("git", "-C", str(self.root), "add", "catalog/sources.json"),
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            (
+                "git", "-C", str(self.root),
+                "-c", "user.name=Test",
+                "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "private cloud policy",
+            ),
+            check=True,
+            capture_output=True,
+        )
+        self.commit = subprocess.check_output(
+            ("git", "-C", str(self.root), "rev-parse", "HEAD"),
+            text=True,
+        ).strip()
+
+        release = self._build(
+            self._close_snapshot(), "csi300-normalized-v1", "private-cloud-releases"
+        )
+        manifest = verify_snapshot_release(release)
+        self.assertTrue(manifest["private_release_eligible"])
+        self.assertFalse(manifest["publication_eligible"])
+        assert_snapshot_release_allowed(self.root, release, "private")
+        with self.assertRaisesRegex(ValueError, "public release is not approved"):
+            assert_snapshot_release_allowed(self.root, release, "public")
+
     def test_fixed_remote_release_is_downloaded_and_staged(self) -> None:
         release = self._build(
             self._close_snapshot(), "csi300-normalized-v1", "remote-releases"

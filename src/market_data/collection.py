@@ -129,11 +129,19 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
     calendar_source = sources.get("szse_calendar", {})
     if source.get("status") == "restricted" or source.get("local_collection_allowed") is not True:
         raise ValueError("local research collection is not enabled for this source")
-    if os.environ.get("GITHUB_ACTIONS") == "true" and source.get("cloud_collection_allowed") is not True:
+    cloud_allowed = source.get("cloud_collection_allowed") is True or (
+        os.environ.get("MARKET_DATA_PRIVATE_CLOUD") == "true"
+        and source.get("private_cloud_collection_allowed") is True
+    )
+    if os.environ.get("GITHUB_ACTIONS") == "true" and not cloud_allowed:
         raise ValueError("cloud collection is not approved")
     if calendar_source.get("local_collection_allowed") is not True:
         raise ValueError("local calendar collection is not enabled")
-    if os.environ.get("GITHUB_ACTIONS") == "true" and calendar_source.get("cloud_collection_allowed") is not True:
+    calendar_cloud_allowed = calendar_source.get("cloud_collection_allowed") is True or (
+        os.environ.get("MARKET_DATA_PRIVATE_CLOUD") == "true"
+        and calendar_source.get("private_cloud_collection_allowed") is True
+    )
+    if os.environ.get("GITHUB_ACTIONS") == "true" and not calendar_cloud_allowed:
         raise ValueError("cloud calendar collection is not approved")
     if instrument.get("asset_type") != "index" or instrument.get("series_type") != "price_index":
         raise ValueError("collector accepts registered price indices only")
