@@ -61,6 +61,23 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument("--cache-dir", required=True, type=Path)
     stage.add_argument("--allow-synthetic", action="store_true", help="explicit smoke-test use only")
 
+    fetch = subcommands.add_parser("fetch-release", help="download a caller-pinned immutable public GitHub release")
+    fetch.add_argument("--repository", required=True)
+    fetch.add_argument("--release-id", required=True)
+    fetch.add_argument("--manifest-sha256", required=True)
+    fetch.add_argument("--dataset-id", required=True)
+    fetch.add_argument("--cache-dir", required=True, type=Path)
+    fetch.add_argument("--allow-synthetic", action="store_true", help="explicit smoke-test use only")
+
+    shadow = subcommands.add_parser("shadow-check", help="compare pinned research caches without switching production")
+    shadow.add_argument("--candidate", required=True, type=Path)
+    shadow.add_argument("--baseline", required=True, type=Path)
+    shadow.add_argument("--candidate-manifest-sha256", required=True)
+    shadow.add_argument("--baseline-manifest-sha256", required=True)
+    shadow.add_argument("--expected-session", required=True)
+    shadow.add_argument("--minimum-sessions", type=int, default=900)
+    shadow.add_argument("--relative-tolerance", type=float, default=0)
+
     catalog = subcommands.add_parser(
         "catalog-check", help="validate instrument, source, dataset, and watchlist metadata"
     )
@@ -124,6 +141,21 @@ def _run(args: argparse.Namespace) -> int:
             cache_dir=args.cache_dir, allow_synthetic=args.allow_synthetic)
         print(output)
         return 0
+    if args.command == "fetch-release":
+        from .transport import fetch_release
+        print(fetch_release(repository=args.repository, release_id=args.release_id,
+            expected_manifest_sha256=args.manifest_sha256, expected_dataset_id=args.dataset_id,
+            cache_dir=args.cache_dir, allow_synthetic=args.allow_synthetic))
+        return 0
+    if args.command == "shadow-check":
+        from .shadow import compare_shadow
+        report = compare_shadow(candidate=args.candidate, baseline=args.baseline,
+            candidate_manifest_sha256=args.candidate_manifest_sha256,
+            baseline_manifest_sha256=args.baseline_manifest_sha256,
+            expected_session=args.expected_session, minimum_sessions=args.minimum_sessions,
+            relative_tolerance=args.relative_tolerance)
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0 if report["comparison_passed"] else 1
     if args.command == "catalog-check":
         counts = validate_catalog(args.root.resolve())
         print(

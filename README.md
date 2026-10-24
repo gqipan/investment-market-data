@@ -76,7 +76,7 @@ PYTHONPATH=src python -m market_data verify-release \
 
 ## 私人应用接入
 
-已提供 `stage-release`：调用方锁定清单哈希和数据集 ID 后，生成不可变的消费缓存，并将国内研究 CLI 所需的 `CN` 转为 `A`，保留上游身份。它不会修改有效版本指针或业务数据库。后台下载、生产缓存适配、五个交易日影子对照和估值接入的边界见[消费端接入契约](docs/consumer-integration.md)。
+已提供 `stage-release` 和匿名 `fetch-release`：调用方锁定不可变正式 tag、清单哈希和数据集 ID 后，下载并生成不可变的消费缓存，将国内研究 CLI 所需的 `CN` 转为 `A`，保留上游身份。`shadow-check` 对照固定消费缓存，默认要求至少 900 个交易日；六日验收样本不能当作 850 日均线历史。所有命令均不切换生产指针或写业务数据库。生产任务编排、缓存适配、五个交易日影子对照和估值接入的边界见[消费端接入契约](docs/consumer-integration.md)。
 
 ## 发布边界
 
