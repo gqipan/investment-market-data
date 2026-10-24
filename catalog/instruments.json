@@ -31,6 +31,8 @@
     "timezone": "Asia/Shanghai",
     "frequency": "1d",
     "adjust": "raw",
+    "history_start": "2024-09-23",
+    "history_start_basis": "official_publication_date",
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000510",
@@ -93,12 +95,33 @@
     "timezone": "Asia/Shanghai",
     "frequency": "1d",
     "adjust": "raw",
-    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "notes": "Selected core price index. Do not merge it with the total-return series 399606.",
     "provider_symbols": {
       "tencent_raw": "sz399006",
       "sina_raw": "sz399006",
       "akshare_eastmoney": "sz399006",
       "danjuan_snapshot": "SZ399006"
+    }
+  },
+  "chinext_total_return": {
+    "canonical_id": "index.cn.szse.399606.total_return",
+    "display_name": "创业板R",
+    "symbol": "399606",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "total_return_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "base_date": "2010-05-31",
+    "history_start": "2010-06-02",
+    "history_start_basis": "first_published_observation",
+    "notes": "Total-return companion to price index 399006. Keep its own identity and never substitute one series for the other.",
+    "provider_symbols": {
+      "tencent_raw": "sz399606",
+      "sina_raw": "sz399606",
+      "akshare_eastmoney": "sz399606"
     }
   },
   "star50": {
@@ -112,6 +135,9 @@
     "timezone": "Asia/Shanghai",
     "frequency": "1d",
     "adjust": "raw",
+    "history_start": "2019-12-31",
+    "history_start_basis": "official_base_date",
+    "published_from": "2020-07-23",
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000688",
@@ -176,6 +202,7 @@
       "sina_raw": "sh000932",
       "akshare_eastmoney": "sh000932",
       "danjuan_snapshot": "SH000932",
+      "csindex_official": "000932",
       "csindex_optional_history": "000932"
     }
   },
@@ -196,6 +223,7 @@
       "sina_raw": "sh000991",
       "akshare_eastmoney": "sh000991",
       "danjuan_snapshot": "SH000991",
+      "csindex_official": "000991",
       "csindex_optional_history": "000991"
     }
   },
@@ -216,6 +244,7 @@
       "sina_raw": "sh000993",
       "akshare_eastmoney": "sh000993",
       "danjuan_snapshot": "SH000993",
+      "csindex_official": "000993",
       "csindex_optional_history": "000993"
     }
   }

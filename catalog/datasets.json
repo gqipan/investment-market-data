@@ -64,6 +64,17 @@
     "volume_unit": "tencent_lots",
     "adapter": "tencent_raw-v1"
   },
+  "chinext-total-return-price-v1": {
+    "instrument": "chinext_total_return",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.szse.399606.total_return.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "ChiNext total-return index normalized daily OHLCV",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
   "star50-price-v1": {
     "instrument": "star50",
     "source": "tencent_raw",
@@ -99,36 +110,36 @@
   },
   "csi-consumer-price-v1": {
     "instrument": "csi_consumer",
-    "source": "tencent_raw",
-    "dataset_key": "index.cn.csi.000932.price.tencent_raw",
+    "source": "csindex_official",
+    "dataset_key": "index.cn.csi.000932.price.csindex_official",
     "data_class": "normalized_price",
     "label": "CSI Consumer normalized daily price index",
     "bars_file": null,
     "calendar_file": null,
-    "volume_unit": "tencent_lots",
-    "adapter": "tencent_raw-v1"
+    "volume_unit": "csindex_reported_volume",
+    "adapter": "csindex_official-v1"
   },
   "csi-allshare-healthcare-price-v1": {
     "instrument": "csi_allshare_healthcare",
-    "source": "tencent_raw",
-    "dataset_key": "index.cn.csi.000991.price.tencent_raw",
+    "source": "csindex_official",
+    "dataset_key": "index.cn.csi.000991.price.csindex_official",
     "data_class": "normalized_price",
     "label": "CSI All Share Healthcare normalized daily price index",
     "bars_file": null,
     "calendar_file": null,
-    "volume_unit": "tencent_lots",
-    "adapter": "tencent_raw-v1"
+    "volume_unit": "csindex_reported_volume",
+    "adapter": "csindex_official-v1"
   },
   "csi-allshare-information-price-v1": {
     "instrument": "csi_allshare_information",
-    "source": "tencent_raw",
-    "dataset_key": "index.cn.csi.000993.price.tencent_raw",
+    "source": "csindex_official",
+    "dataset_key": "index.cn.csi.000993.price.csindex_official",
     "data_class": "normalized_price",
     "label": "CSI All Share Information Technology normalized daily price index",
     "bars_file": null,
     "calendar_file": null,
-    "volume_unit": "tencent_lots",
-    "adapter": "tencent_raw-v1"
+    "volume_unit": "csindex_reported_volume",
+    "adapter": "csindex_official-v1"
   },
   "csi300-valuation-v1": {
     "instrument": "csi300",
@@ -180,6 +191,17 @@
     "dataset_key": "index.cn.szse.399006.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "ChiNext raw valuation observations",
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "chinext-total-return-valuation-v1": {
+    "instrument": "chinext_total_return",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.szse.399606.total_return.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "ChiNext total-return raw valuation observations",
     "fields": ["Date", "Metric", "Value", "Unit", "Method"],
     "adapter": "valuation-observation-v1",
     "bars_file": null,

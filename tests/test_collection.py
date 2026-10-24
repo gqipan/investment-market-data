@@ -182,6 +182,110 @@ class CollectionTests(unittest.TestCase):
             self.assertTrue((target / 'bars.csv').is_file())
             self.assertTrue(any(params.get('datalen') == 2000 for _, params in calls))
 
+    def test_official_csi_adapter_ignores_only_documented_closed_snapshot(self):
+        calls = []
+
+        def request(url, params):
+            calls.append((url, params))
+            if 'monthList' in url:
+                return {'data': [
+                    {
+                        'jyrq': date(2018, 6, day).isoformat(),
+                        'jybz': '1' if day == 15 else '0',
+                    }
+                    for day in range(1, 31)
+                ]}
+            return {
+                'code': '200',
+                'data': [
+                    {
+                        'tradeDate': '20180615',
+                        'open': 100,
+                        'high': 102,
+                        'low': 99,
+                        'close': 101,
+                        'tradingVol': 1000,
+                    },
+                    {
+                        'tradeDate': '20180618',
+                        'open': None,
+                        'high': None,
+                        'low': None,
+                        'close': 101,
+                        'tradingVol': 0,
+                    },
+                ],
+            }
+
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'snapshot'
+            collection.collect_index(
+                root=ROOT,
+                dataset_name='csi-consumer-price-v1',
+                start='2018-06-15',
+                end='2018-06-18',
+                output=target,
+                request=request,
+            )
+            manifest = json.loads((target / 'manifest.json').read_text())
+            self.assertEqual(manifest['source'], 'csindex_official')
+            self.assertEqual(manifest['row_count'], 1)
+            self.assertEqual(
+                manifest['ignored_closed_observations'],
+                ['2018-06-18'],
+            )
+            self.assertTrue(any('index-perf' in url for url, _ in calls))
+
+    def test_total_return_index_keeps_its_series_identity(self):
+        def request(url, params):
+            if 'monthList' in url:
+                return calendar_rows('2026-10-19')
+            return {
+                'code': 0,
+                'data': {'sz399606': {'day': [
+                    ['2026-10-19', '100', '101', '102', '99', '1000'],
+                ]}},
+            }
+
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'snapshot'
+            collection.collect_index(
+                root=ROOT,
+                dataset_name='chinext-total-return-price-v1',
+                start='2026-10-19',
+                end='2026-10-19',
+                output=target,
+                request=request,
+            )
+            manifest = json.loads((target / 'manifest.json').read_text())
+            self.assertEqual(manifest['symbol'], '399606')
+            self.assertEqual(manifest['series_type'], 'total_return_index')
+            self.assertEqual(manifest['history_start'], '2010-06-02')
+
+    def test_collection_records_index_history_start(self):
+        def request(url, params):
+            if 'monthList' in url:
+                return calendar_rows('2026-10-19')
+            return {
+                'code': 0,
+                'data': {'sh000510': {'day': [
+                    ['2026-10-19', '100', '101', '102', '99', '1000'],
+                ]}},
+            }
+
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'snapshot'
+            collection.collect_index(
+                root=ROOT,
+                dataset_name='csi-a500-price-v1',
+                start='2026-10-19',
+                end='2026-10-19',
+                output=target,
+                request=request,
+            )
+            manifest = json.loads((target / 'manifest.json').read_text())
+            self.assertEqual(manifest['history_start'], '2024-09-23')
+
     def test_duplicate_calendar_rows_are_rejected(self):
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             collection.fetch_calendar(date(2026,10,19),date(2026,10,20),request=lambda *_:{'data': [

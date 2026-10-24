@@ -39,7 +39,8 @@ def _load(directory: Path, pin: str):
     _check_export(directory, m['upstream_release_manifest_sha256'], m['upstream_dataset_id'], m['dataset_id'])
     if (m.get('market') != 'A' or m.get('currency') != 'CNY'
             or not re.fullmatch(r'[0-9]{6}', m['symbol'])
-            or m.get('series_type') != 'price_index' or m.get('frequency') != '1d'
+            or m.get('series_type') not in {'price_index', 'total_return_index'}
+            or m.get('frequency') != '1d'
             or m.get('timezone') != 'Asia/Shanghai' or m.get('adjust') not in ('', 'raw', 'none')):
         raise ValueError('shadow input must be domestic raw daily price-index data')
     return m, {b.day:b for b in read_bars(directory / 'bars.csv')}
