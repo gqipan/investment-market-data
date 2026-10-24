@@ -6,6 +6,7 @@
 
 - 11 个指数已登记独立身份、价格与估值数据集。
 - 价格默认使用腾讯原始日线 `tencent_raw`，无需中证官网；930955 没有可用腾讯映射，目录已改登记为 `akshare_eastmoney` 并保留“线上可取性待复核”状态。
+- 完整 OHLCV 回测历史可显式使用 Sina 原始指数日线 `sina_raw`。它作为独立数据源提供最多 2,000 个交易日，必须与腾讯收盘或现有生产行情完成跨来源影子对照后才能进入私人消费端；不会自动从腾讯回退到 Sina。
 - `backfill` 批量回补历史和独立估值，输出逐指数覆盖、频率、缺日与错误报告。
 - 本地 `collect` 命令生成独立快照，包含行情、独立交易日历、实际来源、单位、日期、SHA-256 和内容身份。
 - 支持合成样例或真实本地快照生成候选包；验算检查文件白名单、压缩包、隐私、哈希、行数和交易日覆盖。
@@ -46,6 +47,15 @@ PYTHONPATH=src python -m market_data collect \
   --dataset csi300-normalized-v1 --provider akshare_eastmoney \
   --start 2026-10-16 --end 2026-10-23 \
   --output data/local/csi300-akshare-em-20261023
+```
+
+Sina 原始指数接口（完整 OHLCV，最多 2,000 个交易日）：
+
+```bash
+PYTHONPATH=src python -m market_data collect \
+  --dataset csi300-normalized-v1 --provider sina_raw \
+  --start 2018-07-24 --end 2026-10-23 \
+  --output data/local/csi300-sina-20261023
 ```
 
 显式选择来源，不自动回退或拼接。腾讯每个请求最多尝试三次，每次超时 15 秒；AkShare 在独立进程内执行，整体超时 120 秒。AkShare 是接口库，清单仍记录实际东方财富端点和库版本。不同来源生成不同 `dataset_key`，不能当作同一历史序列。

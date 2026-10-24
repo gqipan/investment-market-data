@@ -15,7 +15,7 @@ import subprocess
 import sys
 import threading
 
-from .collection import (CALENDAR_URL, TENCENT_URL, _akshare_bars, collect_index,
+from .collection import (CALENDAR_URL, SINA_URL, TENCENT_URL, _akshare_bars, collect_index,
                          fetch_calendar, request_json)
 from .release import _json_bytes, dataset_identity
 from .valuation import normalize_csindex, normalize_danjuan, normalize_legu, write_valuation, verify_valuation
@@ -50,7 +50,8 @@ class CachedRequest:
         self.lock = threading.Lock()
 
     def __call__(self, url: str, params: dict):
-        allowed = {TENCENT_URL: {'param'}, CALENDAR_URL: {'month'}, DANJUAN_URL: set(),
+        allowed = {TENCENT_URL: {'param'}, SINA_URL: {'symbol', 'scale', 'ma', 'datalen'},
+                   CALENDAR_URL: {'month'}, DANJUAN_URL: set(),
                    CSINDEX_URL: {'indexCode', 'startDate', 'endDate'}}
         if url not in allowed or set(params) != allowed[url]:
             raise ValueError('request is outside the public history endpoint allowlist')

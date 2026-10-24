@@ -13,6 +13,7 @@
     "notes": "Selected core index. The identifier is defined before any data source is approved.",
     "provider_symbols": {
       "tencent_raw": "sh000300",
+      "sina_raw": "sh000300",
       "akshare_eastmoney": "sh000300",
       "danjuan_snapshot": "SH000300",
       "akshare_legulegu": "沪深300",
@@ -33,6 +34,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000510",
+      "sina_raw": "sh000510",
       "akshare_eastmoney": "sh000510",
       "danjuan_snapshot": "SH000510",
       "csindex_optional_history": "000510"
@@ -52,6 +54,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000905",
+      "sina_raw": "sh000905",
       "akshare_eastmoney": "sh000905",
       "danjuan_snapshot": "SH000905",
       "akshare_legulegu": "中证500",
@@ -72,6 +75,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000852",
+      "sina_raw": "sh000852",
       "akshare_eastmoney": "sh000852",
       "danjuan_snapshot": "SH000852",
       "akshare_legulegu": "中证1000",
@@ -92,6 +96,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sz399006",
+      "sina_raw": "sz399006",
       "akshare_eastmoney": "sz399006",
       "danjuan_snapshot": "SZ399006"
     }
@@ -110,6 +115,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000688",
+      "sina_raw": "sh000688",
       "akshare_eastmoney": "sh000688",
       "danjuan_snapshot": "SH000688",
       "csindex_optional_history": "000688"
@@ -129,6 +135,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000922",
+      "sina_raw": "sh000922",
       "akshare_eastmoney": "sh000922",
       "danjuan_snapshot": "SH000922",
       "csindex_optional_history": "000922"
@@ -166,6 +173,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000932",
+      "sina_raw": "sh000932",
       "akshare_eastmoney": "sh000932",
       "danjuan_snapshot": "SH000932",
       "csindex_optional_history": "000932"
@@ -185,6 +193,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000991",
+      "sina_raw": "sh000991",
       "akshare_eastmoney": "sh000991",
       "danjuan_snapshot": "SH000991",
       "csindex_optional_history": "000991"
@@ -204,6 +213,7 @@
     "notes": "Selected core index. Price and valuation sources remain pending authorization.",
     "provider_symbols": {
       "tencent_raw": "sh000993",
+      "sina_raw": "sh000993",
       "akshare_eastmoney": "sh000993",
       "danjuan_snapshot": "SH000993",
       "csindex_optional_history": "000993"
