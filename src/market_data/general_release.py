@@ -70,14 +70,43 @@ def _snapshot_metadata(snapshot: Path, data_class: str) -> tuple[dict[str, Any],
 
 def _source_eligibility(source: dict[str, Any], *, public: bool) -> bool:
     key = "public_release_allowed" if public else "private_release_allowed"
+    cloud_collection = (
+        "cloud_collection_allowed"
+        if public or "private_cloud_collection_allowed" not in source
+        else "private_cloud_collection_allowed"
+    )
+    cloud_storage = (
+        "cloud_storage_allowed"
+        if public or "private_cloud_storage_allowed" not in source
+        else "private_cloud_storage_allowed"
+    )
     common = (
         source.get(key),
-        source.get("cloud_collection_allowed"),
-        source.get("cloud_storage_allowed"),
+        source.get(cloud_collection),
+        source.get(cloud_storage),
     )
     if public:
         common += (source.get("redistribution_allowed"),)
     return all(value is True for value in common)
+
+
+def _release_permissions(source: dict[str, Any], scope: str) -> tuple[str, ...]:
+    permission_key = "public_release_allowed" if scope == "public" else "private_release_allowed"
+    private = scope == "private"
+    cloud_collection = (
+        "private_cloud_collection_allowed"
+        if private and "private_cloud_collection_allowed" in source
+        else "cloud_collection_allowed"
+    )
+    cloud_storage = (
+        "private_cloud_storage_allowed"
+        if private and "private_cloud_storage_allowed" in source
+        else "cloud_storage_allowed"
+    )
+    keys = (permission_key, cloud_collection, cloud_storage)
+    if not private:
+        keys += ("redistribution_allowed",)
+    return keys
 
 
 def _snapshot_span(
@@ -463,15 +492,12 @@ def assert_snapshot_release_allowed(root: Path, release_dir: Path, scope: str) -
     statuses = {"approved_private", "approved_public"} if scope == "private" else {"approved_public"}
     if source.get("status") not in statuses:
         raise ValueError(f"release is blocked: source status is {source.get('status')}")
-    permission_key = "private_release_allowed" if scope == "private" else "public_release_allowed"
-    required = (permission_key, "cloud_collection_allowed", "cloud_storage_allowed")
-    if scope == "public":
-        required += ("redistribution_allowed",)
-    if any(source.get(key) is not True for key in required):
+    if any(source.get(key) is not True for key in _release_permissions(source, scope)):
         raise ValueError(f"release is blocked: source is not approved for {scope} release")
     if calendar_source:
+        calendar_required = _release_permissions(calendar_source, scope)
         if calendar_source.get("status") not in statuses or any(
-            calendar_source.get(key) is not True for key in required
+            calendar_source.get(key) is not True for key in calendar_required
         ):
             raise ValueError(f"release is blocked: calendar source is not approved for {scope} release")
     check_code_commit(root, header["code_commit"])

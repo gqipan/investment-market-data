@@ -28,7 +28,11 @@ def _local_gate(sources, source):
     policy = sources[source]
     if policy.get('status') == 'restricted' or policy.get('local_collection_allowed') is not True:
         raise ValueError('local research collection is not enabled for ' + source)
-    if os.environ.get('GITHUB_ACTIONS') == 'true' and policy.get('cloud_collection_allowed') is not True:
+    cloud_allowed = policy.get('cloud_collection_allowed') is True or (
+        os.environ.get('MARKET_DATA_PRIVATE_CLOUD') == 'true'
+        and policy.get('private_cloud_collection_allowed') is True
+    )
+    if os.environ.get('GITHUB_ACTIONS') == 'true' and not cloud_allowed:
         raise ValueError('cloud collection is not approved for ' + source)
 
 
