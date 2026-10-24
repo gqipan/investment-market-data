@@ -152,6 +152,36 @@ class CollectionTests(unittest.TestCase):
                 self.assertEqual(manifest['library_version'], 'test-version')
                 self.assertIn('eastmoney', manifest['source_url'])
 
+    def test_sina_adapter_collects_raw_ohlcv_with_independent_calendar(self):
+        calls = []
+        def request(url, params):
+            calls.append((url, params))
+            if 'monthList' in url:
+                return calendar_rows('2026-10-19', '2026-10-20')
+            return [
+                {'day': '2026-10-16', 'open': 99, 'high': 102, 'low': 98, 'close': 101, 'volume': 900},
+                {'day': '2026-10-19', 'open': 100, 'high': 103, 'low': 99, 'close': 102, 'volume': 1000},
+                {'day': '2026-10-20', 'open': 101, 'high': 104, 'low': 100, 'close': 103, 'volume': 1100},
+            ]
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'snapshot'
+            collection.collect_index(
+                root=ROOT,
+                dataset_name='csi300-normalized-v1',
+                provider='sina_raw',
+                start='2026-10-19',
+                end='2026-10-20',
+                output=target,
+                request=request,
+            )
+            manifest = json.loads((target / 'manifest.json').read_text())
+            self.assertEqual(manifest['source'], 'sina_raw')
+            self.assertEqual(manifest['dataset_id'], manifest['dataset_id'])
+            self.assertEqual(manifest['row_count'], 2)
+            self.assertFalse(manifest['publication_eligible'])
+            self.assertTrue((target / 'bars.csv').is_file())
+            self.assertTrue(any(params.get('datalen') == 2000 for _, params in calls))
+
     def test_duplicate_calendar_rows_are_rejected(self):
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             collection.fetch_calendar(date(2026,10,19),date(2026,10,20),request=lambda *_:{'data': [

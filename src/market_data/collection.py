@@ -22,8 +22,9 @@ from .release import _json_bytes, _write_bars, _write_calendar, dataset_identity
 
 
 TENCENT_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+SINA_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
 CALENDAR_URL = "https://www.szse.cn/api/report/exchange/onepersistenthour/monthList"
-PROVIDERS = {"tencent_raw", "akshare_eastmoney"}
+PROVIDERS = {"tencent_raw", "sina_raw", "akshare_eastmoney"}
 
 
 def request_json(url: str, params: dict):
@@ -105,6 +106,34 @@ def _akshare_bars(symbol: str, start: date, end: date) -> tuple[list[dict], str]
     return payload["bars"], payload["version"]
 
 
+def _sina_bars(symbol: str, start: date, end: date, request) -> list[Bar]:
+    """Read Sina's raw index day series and retain only the requested range.
+
+    The endpoint accepts a trailing row count, not date bounds. Requesting its
+    documented 2,000-row maximum preserves enough history for the 850-session
+    research window without inventing rows before the endpoint's retained
+    prefix. Requested-range coverage is validated independently below.
+    """
+    payload = request(
+        SINA_URL,
+        {"symbol": symbol, "scale": 240, "ma": "no", "datalen": 2000},
+    )
+    if not isinstance(payload, list) or not payload:
+        raise ValueError("Sina raw index response is missing")
+    bars = []
+    for row in payload:
+        if not isinstance(row, dict) or not {"day", "open", "high", "low", "close", "volume"} <= set(row):
+            raise ValueError("Sina raw index fields are incomplete")
+        day = date.fromisoformat(str(row["day"])[:10])
+        if day < start or day > end:
+            continue
+        values = [float(row[key]) for key in ("open", "high", "low", "close", "volume")]
+        bars.append(Bar(day, *values))
+    if not bars:
+        raise ValueError("Sina raw index series has no rows in the requested range")
+    return bars
+
+
 def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
                   output: Path, provider: str | None = None, request=request_json) -> Path:
     root, output = root.resolve(), output.resolve()
@@ -153,6 +182,9 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
     if provider == "tencent_raw":
         bars = _tencent_bars(symbol, first, last, request)
         source_url = TENCENT_URL
+    elif provider == "sina_raw":
+        bars = _sina_bars(symbol, first, last, request)
+        source_url = SINA_URL
     else:
         records, library_version = _akshare_bars(symbol, first, last)
         bars = [Bar(date.fromisoformat(str(row["date"])[:10]), *[

@@ -69,6 +69,21 @@
     "volume_unit": "tencent_lots",
     "notes": "Operator approves collection and storage only in the owner-controlled private cache. Public release and redistribution remain disabled. Index publisher identity does not select the transport endpoint."
   },
+  "sina_raw": {
+    "status": "approved_private",
+    "local_collection_allowed": true,
+    "private_release_allowed": true,
+    "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://finance.sina.com.cn/realstock/company/sh000300/nc.shtml",
+    "checked_at": "2026-10-25",
+    "volume_unit": "sina_lots",
+    "notes": "Operator approves owner-controlled private collection and storage for corrected full OHLCV backtest history. Public release and redistribution remain disabled; the endpoint is never an implicit fallback."
+  },
   "akshare_eastmoney": {
     "status": "approved_private",
     "local_collection_allowed": true,

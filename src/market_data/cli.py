@@ -59,7 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect = subcommands.add_parser("collect", help="collect a local raw index price snapshot")
     collect.add_argument("--root", type=Path, default=_default_root())
     collect.add_argument("--dataset", required=True)
-    collect.add_argument("--provider", choices=("tencent_raw", "akshare_eastmoney"))
+    collect.add_argument("--provider", choices=("tencent_raw", "sina_raw", "akshare_eastmoney"))
     collect.add_argument("--start", required=True)
     collect.add_argument("--end", required=True)
     collect.add_argument("--output", required=True, type=Path)
