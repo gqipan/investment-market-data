@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "investment-market-data"
+version = "0.1.0"
+description = "Auditable market-data packaging and release tooling"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "investment-market-data contributors" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+collection = ["akshare>=1.18.21,<2"]
+
+[project.scripts]
+market-data = "market_data.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

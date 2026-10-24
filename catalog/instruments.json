@@ -1,0 +1,188 @@
+{
+  "csi300": {
+    "canonical_id": "index.cn.csi.000300.price",
+    "display_name": "沪深300",
+    "symbol": "000300",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. The identifier is defined before any data source is approved.",
+    "provider_symbols": {
+      "tencent_raw": "sh000300",
+      "akshare_eastmoney": "sh000300"
+    }
+  },
+  "csi_a500": {
+    "canonical_id": "index.cn.csi.000510.price",
+    "display_name": "中证A500",
+    "symbol": "000510",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000510",
+      "akshare_eastmoney": "sh000510"
+    }
+  },
+  "csi500": {
+    "canonical_id": "index.cn.csi.000905.price",
+    "display_name": "中证500",
+    "symbol": "000905",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000905",
+      "akshare_eastmoney": "sh000905"
+    }
+  },
+  "csi1000": {
+    "canonical_id": "index.cn.csi.000852.price",
+    "display_name": "中证1000",
+    "symbol": "000852",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000852",
+      "akshare_eastmoney": "sh000852"
+    }
+  },
+  "chinext": {
+    "canonical_id": "index.cn.szse.399006.price",
+    "display_name": "创业板指",
+    "symbol": "399006",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sz399006",
+      "akshare_eastmoney": "sz399006"
+    }
+  },
+  "star50": {
+    "canonical_id": "index.cn.csi.000688.price",
+    "display_name": "科创50",
+    "symbol": "000688",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000688",
+      "akshare_eastmoney": "sh000688"
+    }
+  },
+  "csi_dividend": {
+    "canonical_id": "index.cn.csi.000922.price",
+    "display_name": "中证红利",
+    "symbol": "000922",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000922",
+      "akshare_eastmoney": "sh000922"
+    }
+  },
+  "dividend_low_vol_100": {
+    "canonical_id": "index.cn.csi.930955.price",
+    "display_name": "红利低波100",
+    "symbol": "930955",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Tencent raw series unavailable in the 2026-10-24 live check; explicit AkShare/Eastmoney mapping remains unverified online. No automatic fallback.",
+    "provider_symbols": {
+      "akshare_eastmoney": "csi930955"
+    }
+  },
+  "csi_consumer": {
+    "canonical_id": "index.cn.csi.000932.price",
+    "display_name": "中证消费",
+    "symbol": "000932",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000932",
+      "akshare_eastmoney": "sh000932"
+    }
+  },
+  "csi_allshare_healthcare": {
+    "canonical_id": "index.cn.csi.000991.price",
+    "display_name": "全指医药",
+    "symbol": "000991",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000991",
+      "akshare_eastmoney": "sh000991"
+    }
+  },
+  "csi_allshare_information": {
+    "canonical_id": "index.cn.csi.000993.price",
+    "display_name": "全指信息",
+    "symbol": "000993",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Selected core index. Price and valuation sources remain pending authorization.",
+    "provider_symbols": {
+      "tencent_raw": "sh000993",
+      "akshare_eastmoney": "sh000993"
+    }
+  }
+}

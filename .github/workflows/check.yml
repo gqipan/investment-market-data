@@ -1,0 +1,85 @@
+name: check
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # 20:17 Asia/Shanghai. GitHub cron is always evaluated in UTC.
+    - cron: "17 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Unit tests
+        env:
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+      - name: Privacy scan
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path . --repository
+      - name: Catalog check
+        env:
+          PYTHONPATH: src
+        run: python -m market_data catalog-check --root .
+      - name: Build and verify synthetic consumer contract
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m market_data build-candidate --dataset csi300-demo --as-of 2026-10-22 --revision 1 --output dist/candidates --generated-at 2026-10-23T00:00:00+00:00
+          python -m market_data verify-release --release-dir dist/candidates/data-2026-10-22-fixture-r1
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          from market_data.consumer import stage_release
+          from market_data.release import assert_release_allowed
+          release = Path("dist/candidates/data-2026-10-22-fixture-r1")
+          raw = (release / "release-manifest.json").read_bytes()
+          manifest = json.loads(raw)
+          manifest_pin = hashlib.sha256(raw).hexdigest()
+          dataset_pin = manifest["datasets"][0]["dataset_id"]
+          target = stage_release(release_dir=release, expected_manifest_sha256=manifest_pin,
+              expected_dataset_id=dataset_pin, cache_dir=Path("dist/consumer-smoke"), allow_synthetic=True)
+          installed = json.loads((target / "manifest.json").read_text())
+          assert installed["market"] == "A"
+          assert installed["upstream_dataset_id"] == dataset_pin
+          for scope in ("private", "public"):
+              try:
+                  assert_release_allowed(Path.cwd(), release, scope)
+              except ValueError as exc:
+                  assert "synthetic" in str(exc)
+              else:
+                  raise AssertionError("synthetic release gate did not block publication")
+          print("consumer contract verified")
+          print("release_manifest_sha256=" + manifest_pin)
+          print("dataset_id=" + dataset_pin)
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: synthetic-release-candidate
+          path: dist/candidates/data-2026-10-22-fixture-r1
+          if-no-files-found: error
+          retention-days: 2
+      - name: Generate catalog report
+        env:
+          PYTHONPATH: src
+        run: python -m market_data catalog-report --root . --output-dir dist/catalog
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: catalog-report
+          path: dist/catalog
+          if-no-files-found: error
+          retention-days: 2

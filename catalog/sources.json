@@ -1,0 +1,95 @@
+{
+  "synthetic_fixture": {
+    "status": "approved_for_tests",
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://github.com/",
+    "checked_at": "2026-10-23",
+    "notes": "Deterministic repository fixture. It is used to test the pipeline and must never be represented as real market data."
+  },
+  "csindex_official": {
+    "status": "pending_authorization",
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://www.csindex.com.cn/",
+    "checked_at": "2026-10-23",
+    "notes": "CSI index market data is subject to index and market-data licensing. Public-site access does not establish redistribution rights."
+  },
+  "szse_official": {
+    "status": "pending_authorization",
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://www.szse.cn/",
+    "checked_at": "2026-10-23",
+    "notes": "Shenzhen index market data requires an explicit review of page access, automated collection, cloud storage, and project-use terms."
+  },
+  "pending_valuation_authorization": {
+    "status": "pending_authorization",
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": null,
+    "checked_at": "2026-10-23",
+    "notes": "Placeholder for index valuation sources. It must be replaced by a publisher-specific source after the exact fields, units, history, automated collection, and private cloud-storage rights are verified."
+  },
+  "githubltf_csi300": {
+    "status": "restricted",
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://github.com/githubltf/CSI300-Historical-Data",
+    "checked_at": "2026-10-23",
+    "notes": "No data license or redistribution grant was found. Do not copy this repository's CSV into a release."
+  },
+  "tencent_raw": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://gu.qq.com/",
+    "checked_at": "2026-10-24",
+    "volume_unit": "tencent_lots",
+    "notes": "Local research collection is enabled. Cloud collection, storage and redistribution are reviewed separately. Index publisher identity does not select the transport endpoint."
+  },
+  "akshare_eastmoney": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://quote.eastmoney.com/center/hszs.html",
+    "checked_at": "2026-10-24",
+    "volume_unit": "eastmoney_lots",
+    "notes": "Local research collection is enabled. Cloud collection, storage and redistribution are reviewed separately. Index publisher identity does not select the transport endpoint."
+  },
+  "szse_calendar": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://www.szse.cn/api/report/exchange/onepersistenthour/monthList",
+    "checked_at": "2026-10-24",
+    "notes": "Independent monthly trading calendar. Local research access is enabled; calendar cloud collection, storage and redistribution require separate approval from the price provider."
+  }
+}

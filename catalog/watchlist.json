@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "name": "selected-core-indices",
+  "source": "user selection on 2026-10-23",
+  "checked_at": "2026-10-23",
+  "required_data_classes": [
+    "normalized_price",
+    "valuation_observation"
+  ],
+  "symbols": [
+    "000300",
+    "000510",
+    "000905",
+    "000852",
+    "399006",
+    "000688",
+    "000922",
+    "930955",
+    "000932",
+    "000991",
+    "000993"
+  ]
+}

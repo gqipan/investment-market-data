@@ -1,0 +1,243 @@
+{
+  "csi300-demo": {
+    "instrument": "csi300",
+    "source": "synthetic_fixture",
+    "dataset_key": "index.cn.csi.000300.price.synthetic.fixture",
+    "data_class": "synthetic_fixture",
+    "label": "Synthetic test fixture only; not a CSI 300 market series",
+    "bars_file": "fixtures/csi300-demo-bars.csv",
+    "calendar_file": "fixtures/csi300-demo-calendar.csv",
+    "volume_unit": "synthetic-units"
+  },
+  "csi300-normalized-v1": {
+    "instrument": "csi300",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000300.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 300 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi-a500-price-v1": {
+    "instrument": "csi_a500",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000510.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI A500 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi500-price-v1": {
+    "instrument": "csi500",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000905.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 500 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi1000-price-v1": {
+    "instrument": "csi1000",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000852.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 1000 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "chinext-price-v1": {
+    "instrument": "chinext",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.szse.399006.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "ChiNext normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "star50-price-v1": {
+    "instrument": "star50",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000688.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "STAR 50 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi-dividend-price-v1": {
+    "instrument": "csi_dividend",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000922.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI Dividend normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "dividend-low-vol-100-price-v1": {
+    "instrument": "dividend_low_vol_100",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.930955.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "Dividend Low Volatility 100 normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi-consumer-price-v1": {
+    "instrument": "csi_consumer",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000932.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI Consumer normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi-allshare-healthcare-price-v1": {
+    "instrument": "csi_allshare_healthcare",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000991.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI All Share Healthcare normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi-allshare-information-price-v1": {
+    "instrument": "csi_allshare_information",
+    "source": "tencent_raw",
+    "dataset_key": "index.cn.csi.000993.price.tencent_raw",
+    "data_class": "normalized_price",
+    "label": "CSI All Share Information Technology normalized daily price index",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "tencent_lots",
+    "adapter": "tencent_raw-v1"
+  },
+  "csi300-valuation-v1": {
+    "instrument": "csi300",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000300.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI 300 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi-a500-valuation-v1": {
+    "instrument": "csi_a500",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000510.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI A500 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi500-valuation-v1": {
+    "instrument": "csi500",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000905.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI 500 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi1000-valuation-v1": {
+    "instrument": "csi1000",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000852.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI 1000 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "chinext-valuation-v1": {
+    "instrument": "chinext",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.szse.399006.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "ChiNext raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "star50-valuation-v1": {
+    "instrument": "star50",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000688.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "STAR 50 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi-dividend-valuation-v1": {
+    "instrument": "csi_dividend",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000922.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI Dividend raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "dividend-low-vol-100-valuation-v1": {
+    "instrument": "dividend_low_vol_100",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.930955.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "Dividend Low Volatility 100 raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi-consumer-valuation-v1": {
+    "instrument": "csi_consumer",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000932.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI Consumer raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi-allshare-healthcare-valuation-v1": {
+    "instrument": "csi_allshare_healthcare",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000991.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI All Share Healthcare raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  },
+  "csi-allshare-information-valuation-v1": {
+    "instrument": "csi_allshare_information",
+    "source": "pending_valuation_authorization",
+    "dataset_key": "index.cn.csi.000993.valuation.normalized",
+    "data_class": "valuation_observation",
+    "label": "CSI All Share Information Technology raw valuation observations",
+    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "bars_file": null,
+    "calendar_file": null
+  }
+}
