@@ -4,7 +4,7 @@
 
 数据仓库发布经过批准的市场数据；私人应用只向数据仓库读取固定版本。私人应用的账本、关注原因、账户、持仓、净值、数据库、报告和凭据不得回传或由数据仓库工作流检出。两边不共享业务数据库，不在网页请求期间同步下载全历史数据。
 
-本轮已实现 `stage-release`：校验调用方锁定的 Release 清单哈希和数据集 ID，将一个版本落入独立、不可变的消费缓存，并转换国内研究读取器所需的市场标记。未实现生产定时下载、自动切换版本或估值导入，也未改动私人应用代码或生产环境。
+已实现 `stage-release`、`fetch-release` 和 `shadow-check`：下载指定不可变公开 Release，校验调用方锁定的清单哈希和数据集 ID，安装独立缓存，再只读对照固定版本。尚未部署生产定时下载、自动切换版本或估值导入，也未改动私人应用代码或生产环境。
 
 ## 第一阶段：离线研究读取器
 
@@ -44,7 +44,7 @@ PYTHONPATH=src python -m market_data stage-release \
 
 ## 第二阶段：下载与生产影子验证
 
-未来正式数据获准发布后，在私人应用侧实现后台下载器：
+固定版本包路线已选定。未来正式数据获准发布后，在私人应用侧编排后台下载任务：
 
 1. 使用只读凭据读取指定仓库和固定 tag；私有仓库需要认证，公开包可以匿名读取。凭据只放消费端环境，不写进 URL、manifest 或公共仓库。
 2. 下载到临时目录，检查大小与完整性，调用 `stage-release`，禁止使用漂移的 Latest 链接作为研究输入。
@@ -53,7 +53,36 @@ PYTHONPATH=src python -m market_data stage-release \
 5. 连续五个交易日只读对照现有行情、单位、缺日和指标结果；验证源站断网、半包、过期、撤回、缓存损坏和回退。
 6. 只有验收通过后，才在私人应用侧原子切换“有效版本”指针；单个后台任务负责切换，网页请求只读已经生效的缓存。失败沿用上一有效版本并显示数据状态。
 
-`stage-release` 本身不联网、不刷新凭据、不运行后台任务、不切换指针。下载器与指针管理属于私人应用后续工作，不能把现有命令描述成已经部署的网页或自动同步服务。
+`stage-release` 本身不联网；`fetch-release` 提供匿名下载组件，但不刷新凭据、不运行后台任务、不切换指针。私人系统的任务注册、缓存适配与指针管理仍需另外实施，不能把命令描述成已部署的网页或自动同步服务。
+
+指定版本下载命令（当前没有正式真实行情 Release，下例需使用审阅通过的实际登记值）：
+
+```bash
+PYTHONPATH=src python -m market_data fetch-release \
+  --repository gqipan/investment-market-data \
+  --release-id "$RELEASE_ID" \
+  --manifest-sha256 "$RELEASE_MANIFEST_SHA256" \
+  --dataset-id "$DATASET_ID" --cache-dir "$MARKET_DATA_CACHE"
+```
+
+[GitHub Release API](https://docs.github.com/en/rest/releases/releases#get-a-release-by-tag-name) 提供固定 tag 和不可变标记。下载器只接受正式、不可变 Release；拒绝草稿、预发布、跨仓库资产、额外文件、错误尺寸和哈希。固定清单须允许公开消费；合成数据只能显式用于冒烟。HTTPS 和重定向仅允许 GitHub 资产域名，连接超时 20 秒，不发送任何认证头。元数据各限 1 MiB，压缩包限 50 MiB。下载失败不创建新消费版本，不回退到 Latest、其他来源或合成 artifact。私人 Release 认证暂不支持。
+
+影子对照使用两个经过审阅并锁定消费清单哈希的独立缓存：
+
+```bash
+PYTHONPATH=src python -m market_data shadow-check \
+  --candidate "$CANDIDATE_CACHE" --baseline "$BASELINE_CACHE" \
+  --candidate-manifest-sha256 "$CANDIDATE_MANIFEST_SHA256" \
+  --baseline-manifest-sha256 "$BASELINE_MANIFEST_SHA256" \
+  --expected-session "$LAST_OPEN_SESSION" \
+  --minimum-sessions 900 --relative-tolerance 0
+```
+
+最近交易日由独立交易日历确定，不能直接使用自然日。报告 JSON 写标准输出，比较通过退出 0，不通过退出 1，输入损坏退出 2。比较覆盖身份、单位、日历哈希、共同日期、缺日、末日新鲜度和 OHLCV 差异。输出不含本地路径。相同数据集自我比较会标为 `same_dataset=true`，只证明读取路径，不能算独立影子验收。容差和历史要求在运行前冻结，不能为通过检查而临时降低。
+
+默认 900 个交易日为 850 日均线保留缓冲；当前六日样本会报告历史不足，不能覆盖生产历史缓存。降低行数只可用于开发冒烟，不能算生产验收。每份报告恒定 `promotion_allowed=false`；五个连续交易日的独立对照和正式切换仍由私人应用完成。
+
+私人系统现有 A 股刷新时刻为 19:30，本仓库校验时刻为 20:17，不能直接令前者等待后者的当天数据。未来真实发布启用后，建议消费端在 21:00 后按固定版本登记检查发布完成和实际交易日，不依赖 GitHub 准点运行；失败沿用旧有效缓存。研究 CLI 先接入；生产 MA 缓存需独立适配，指数不复权与 ETF 前复权缓存保持分开。
 
 GitHub Actions 的 synthetic artifact 只用于验证传输、打包和消费契约，不是正式 Release，也不能用当前合成数据替换线上行情。当前价格与日历来源的云端保存／发布开关仍未批准。
 
