@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import json
 from pathlib import Path
 from typing import Any
@@ -118,6 +119,30 @@ def validate_catalog(root: Path) -> dict[str, int]:
             raise ValueError(
                 f"instrument {instrument_id} must be daily raw data in this schema"
             )
+        history_start = instrument.get("history_start")
+        if history_start is not None:
+            try:
+                parsed_history_start = date.fromisoformat(history_start)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"instrument {instrument_id}.history_start must be ISO date"
+                ) from exc
+            if not isinstance(instrument.get("history_start_basis"), str):
+                raise ValueError(
+                    f"instrument {instrument_id} history start needs a basis"
+                )
+            published_from = instrument.get("published_from")
+            if published_from is not None:
+                try:
+                    parsed_published_from = date.fromisoformat(published_from)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(
+                        f"instrument {instrument_id}.published_from must be ISO date"
+                    ) from exc
+                if parsed_published_from < parsed_history_start:
+                    raise ValueError(
+                        f"instrument {instrument_id} publishes before its history start"
+                    )
 
     for source_id, source in sources.items():
         if not isinstance(source, dict):

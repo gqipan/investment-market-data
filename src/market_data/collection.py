@@ -23,13 +23,22 @@ from .release import _json_bytes, _write_bars, _write_calendar, dataset_identity
 
 TENCENT_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
 SINA_URL = "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData"
+CSINDEX_URL = "https://www.csindex.com.cn/csindex-home/perf/index-perf"
 CALENDAR_URL = "https://www.szse.cn/api/report/exchange/onepersistenthour/monthList"
-PROVIDERS = {"tencent_raw", "sina_raw", "akshare_eastmoney"}
+PROVIDERS = {"tencent_raw", "sina_raw", "akshare_eastmoney", "csindex_official"}
 
 
 def request_json(url: str, params: dict):
+    if "csindex.com.cn" in url:
+        referer = "https://www.csindex.com.cn/"
+    elif "szse.cn" in url:
+        referer = "https://www.szse.cn/"
+    elif "finance.sina.com.cn" in url:
+        referer = "https://finance.sina.com.cn/"
+    else:
+        referer = "https://gu.qq.com/"
     request = Request(url + "?" + urlencode(params), headers={
-        "User-Agent": "Mozilla/5.0", "Referer": "https://www.szse.cn/" if "szse.cn" in url else "https://gu.qq.com/",
+        "User-Agent": "Mozilla/5.0", "Referer": referer,
     })
     for attempt in range(3):
         try:
@@ -134,6 +143,64 @@ def _sina_bars(symbol: str, start: date, end: date, request) -> list[Bar]:
     return bars
 
 
+def _csindex_bars(
+    symbol: str, start: date, end: date, sessions: list[date], request
+) -> tuple[list[Bar], list[date]]:
+    """Read official CSI OHLCV and ignore only explicit no-trade close snapshots."""
+    payload = request(
+        CSINDEX_URL,
+        {
+            "indexCode": symbol,
+            "startDate": start.strftime("%Y%m%d"),
+            "endDate": end.strftime("%Y%m%d"),
+        },
+    )
+    if not isinstance(payload, dict) or str(payload.get("code")) != "200":
+        raise ValueError("CSI official raw index response failed")
+    rows = payload.get("data")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError("CSI official raw index series is missing")
+    expected = set(sessions)
+    bars: list[Bar] = []
+    ignored_closed: list[date] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("CSI official raw index row is invalid")
+        try:
+            day = date(
+                int(str(row["tradeDate"])[:4]),
+                int(str(row["tradeDate"])[4:6]),
+                int(str(row["tradeDate"])[6:8]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("CSI official raw index date is invalid") from exc
+        if not start <= day <= end:
+            continue
+        if day not in expected:
+            unchanged_close = (
+                row.get("open") is None
+                and row.get("high") is None
+                and row.get("low") is None
+                and float(row.get("tradingVol") or 0) == 0
+                and float(row.get("close") or 0) > 0
+            )
+            if not unchanged_close:
+                raise ValueError("CSI official returned an unexpected trading-session date")
+            ignored_closed.append(day)
+            continue
+        try:
+            values = [
+                float(row[key])
+                for key in ("open", "high", "low", "close", "tradingVol")
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("CSI official raw index fields are incomplete") from exc
+        bars.append(Bar(day, *values))
+    if not bars:
+        raise ValueError("CSI official raw index series has no trading-session rows")
+    return bars, ignored_closed
+
+
 def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
                   output: Path, provider: str | None = None, request=request_json) -> Path:
     root, output = root.resolve(), output.resolve()
@@ -172,19 +239,27 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
     )
     if os.environ.get("GITHUB_ACTIONS") == "true" and not calendar_cloud_allowed:
         raise ValueError("cloud calendar collection is not approved")
-    if instrument.get("asset_type") != "index" or instrument.get("series_type") != "price_index":
-        raise ValueError("collector accepts registered price indices only")
+    if instrument.get("asset_type") != "index" or instrument.get("series_type") not in {
+        "price_index", "total_return_index",
+    }:
+        raise ValueError("collector accepts registered price or total-return indices only")
     symbol = instrument.get("provider_symbols", {}).get(provider)
     if not symbol:
         raise ValueError("index provider symbol is not explicitly registered")
     sessions = fetch_calendar(first, last, request=request)
     library_version = None
+    ignored_closed_observations: list[date] = []
     if provider == "tencent_raw":
         bars = _tencent_bars(symbol, first, last, request)
         source_url = TENCENT_URL
     elif provider == "sina_raw":
         bars = _sina_bars(symbol, first, last, request)
         source_url = SINA_URL
+    elif provider == "csindex_official":
+        bars, ignored_closed_observations = _csindex_bars(
+            symbol, first, last, sessions, request
+        )
+        source_url = CSINDEX_URL
     else:
         records, library_version = _akshare_bars(symbol, first, last)
         bars = [Bar(date.fromisoformat(str(row["date"])[:10]), *[
@@ -205,6 +280,12 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
             "market": instrument["market"], "currency": instrument["currency"],
             "series_type": instrument["series_type"], "timezone": instrument["timezone"],
             "frequency": "1d", "adjust": "raw", "adapter_version": provider + "-v1",
+            "history_start": instrument.get("history_start"),
+            "history_start_basis": instrument.get("history_start_basis"),
+            "published_from": instrument.get("published_from"),
+            "ignored_closed_observations": [
+                day.isoformat() for day in ignored_closed_observations
+            ],
             "volume_unit": source["volume_unit"], "library_version": library_version,
             "calendar_id": "szse-month-calendar", "calendar_source_url": CALENDAR_URL,
             "calendar_source_id": "szse_calendar",

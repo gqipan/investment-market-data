@@ -11,15 +11,19 @@
     "notes": "Deterministic repository fixture. It is used to test the pipeline and must never be represented as real market data."
   },
   "csindex_official": {
-    "status": "pending_authorization",
-    "private_release_allowed": false,
+    "status": "approved_private",
+    "local_collection_allowed": true,
+    "private_release_allowed": true,
     "public_release_allowed": false,
+    "private_cloud_collection_allowed": true,
+    "private_cloud_storage_allowed": true,
     "cloud_collection_allowed": false,
     "cloud_storage_allowed": false,
     "redistribution_allowed": false,
     "usage_url": "https://www.csindex.com.cn/",
-    "checked_at": "2026-10-23",
-    "notes": "CSI index market data is subject to index and market-data licensing. Public-site access does not establish redistribution rights."
+    "checked_at": "2026-10-25",
+    "volume_unit": "csindex_reported_volume",
+    "notes": "Operator approves owner-controlled private collection and storage for explicit gap repair and research. Public release and redistribution remain disabled. This source is selected per dataset, never used as an automatic fallback."
   },
   "szse_official": {
     "status": "pending_authorization",

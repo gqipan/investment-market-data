@@ -15,12 +15,19 @@ import subprocess
 import sys
 import threading
 
-from .collection import (CALENDAR_URL, SINA_URL, TENCENT_URL, _akshare_bars, collect_index,
-                         fetch_calendar, request_json)
+from .collection import (
+    CALENDAR_URL,
+    CSINDEX_URL,
+    SINA_URL,
+    TENCENT_URL,
+    _akshare_bars,
+    collect_index,
+    fetch_calendar,
+    request_json,
+)
 from .release import _json_bytes, dataset_identity
 from .valuation import normalize_csindex, normalize_danjuan, normalize_legu, write_valuation, verify_valuation
 
-CSINDEX_URL = 'https://www.csindex.com.cn/csindex-home/perf/index-perf'
 DANJUAN_URL = 'https://danjuanfunds.com/djapi/index_eva/dj'
 
 
@@ -120,13 +127,60 @@ def collect_history_price(*, root: Path, dataset_name: str, start: str, end: str
     dataset = datasets[dataset_name]
     instruments = json.loads((root / 'catalog/instruments.json').read_text())
     instrument = instruments[dataset['instrument']]
-    provider = 'tencent_raw' if 'tencent_raw' in instrument['provider_symbols'] else 'akshare_eastmoney'
+    provider = dataset['source']
     sources = json.loads((root / 'catalog/sources.json').read_text())
     for source in (provider, 'szse_calendar'):
         _local_gate(sources, source)
     symbol = instrument['provider_symbols'][provider]
     if not isinstance(request, HistoricalCalendarRequest):
         request = HistoricalCalendarRequest(request)
+    if provider == 'csindex_official':
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.history-', dir=output.parent) as temporary:
+            staged = Path(temporary) / 'snapshot'
+            collect_index(
+                root=root,
+                dataset_name=dataset_name,
+                provider=provider,
+                start=start,
+                end=end,
+                output=staged,
+                request=request,
+            )
+            meta = json.loads((staged / 'manifest.json').read_text())
+            meta['calendar_errata'] = {
+                'closed_dates': [
+                    day for day in request.repairs if start <= day <= end
+                ],
+                'basis_url': CALENDAR_ERRATUM_URL,
+            }
+            meta['adapter_version'] = 'history-price-v1'
+            meta['history_requested_start'] = start
+            meta['history_requested_end'] = end
+            meta['dataset_id'] = dataset_identity(meta)
+            (staged / 'manifest.json').write_bytes(_json_bytes(meta))
+            if output.exists():
+                raise FileExistsError('history snapshot already exists')
+            os.rename(staged, output)
+        return {
+            'status': 'available',
+            'source': provider,
+            'path': str(output.name),
+            'first_date': meta['first_date'],
+            'last_date': meta['last_date'],
+            'row_count': meta['row_count'],
+            'frequency': 'daily_calendar_verified',
+            'coverage_verified': True,
+            'requested_start': start,
+            'requested_end': end,
+            'requested_range_complete': True,
+            'prefix_unavailable_before': None,
+            'calendar_errata': meta['calendar_errata'],
+            'ohlc_anomalies': [],
+            'ohlcv_validation_passed': True,
+            'missing_sessions': [],
+            'dataset_id': meta['dataset_id'],
+        }
     days = []
     annual_payloads = {}
     if provider == 'tencent_raw':

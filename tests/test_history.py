@@ -81,9 +81,52 @@ class HistoryTests(unittest.TestCase):
             report = backfill(root=ROOT, start='2025-01-01', end='2025-01-03', output=Path(temp) / 'run',
                               request=unavailable, legu_fetch=unavailable, price_fetch=unavailable)
             self.assertEqual(report['status'], 'partial')
-            self.assertEqual(len(report['indices']), 11)
+            self.assertEqual(len(report['indices']), 12)
             self.assertTrue(all(row['price']['status'] == 'unavailable' for row in report['indices']))
             self.assertTrue((Path(temp) / 'run' / 'coverage-report.md').is_file())
+
+    def test_history_uses_the_dataset_source_instead_of_implicit_tencent(self):
+        from market_data.history import collect_history_price
+        from market_data.collection import CALENDAR_URL
+
+        def request(url, params):
+            if url == CALENDAR_URL:
+                return {
+                    'data': [
+                        {
+                            'jyrq': f'2018-06-{day:02d}',
+                            'jybz': '1' if day == 15 else '0',
+                        }
+                        for day in range(1, 31)
+                    ]
+                }
+            return {
+                'code': '200',
+                'data': [
+                    {
+                        'tradeDate': '20180615',
+                        'open': 100,
+                        'high': 102,
+                        'low': 99,
+                        'close': 101,
+                        'tradingVol': 1000,
+                    }
+                ],
+            }
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict(
+            os.environ, {'GITHUB_ACTIONS': 'false'}
+        ):
+            report = collect_history_price(
+                root=ROOT,
+                dataset_name='csi-consumer-price-v1',
+                start='2018-06-15',
+                end='2018-06-15',
+                output=Path(temp) / 'price',
+                request=request,
+            )
+            self.assertEqual(report['source'], 'csindex_official')
+            self.assertTrue(report['requested_range_complete'])
 
 
 class HistoryCliTests(unittest.TestCase):
@@ -177,7 +220,7 @@ class BackfillBoundaryTests(unittest.TestCase):
                 request=lambda *_:{'data':[None]},price_fetch=unavailable,legu_fetch=lambda *_:{'pe':[],'pb':[]})
             self.assertEqual(report['status'],'partial')
             self.assertEqual(report['calendar']['status'],'unavailable')
-            self.assertEqual(len(report['indices']),11)
+            self.assertEqual(len(report['indices']),12)
             self.assertTrue((Path(temp)/'run/coverage-report.json').exists())
 
     def test_metadata_write_failure_does_not_install_snapshot(self):

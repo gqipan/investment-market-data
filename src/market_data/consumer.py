@@ -96,7 +96,9 @@ def stage_release(*, release_dir: Path, expected_manifest_sha256: str,
         source = unpacked / item["catalog_dataset"]
         manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
         if (manifest.get("market") != "CN" or manifest.get("currency") != "CNY"
-                or manifest.get("series_type") not in {"price_index", "etf_raw"}
+                or manifest.get("series_type") not in {
+                    "price_index", "total_return_index", "etf_raw",
+                }
                 or manifest.get("timezone") != "Asia/Shanghai" or manifest.get("frequency") != "1d"
                 or manifest.get("adjust") not in {"", "raw", "none"}):
             raise ValueError("dataset is incompatible with the domestic legacy reader")
