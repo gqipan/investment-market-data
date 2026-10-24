@@ -54,6 +54,16 @@ def build_parser() -> argparse.ArgumentParser:
     collect.add_argument("--end", required=True)
     collect.add_argument("--output", required=True, type=Path)
 
+    history = subcommands.add_parser("backfill", help="collect local price and valuation history; retain partial coverage")
+    history.add_argument("--root", type=Path, default=_default_root())
+    history.add_argument("--start", required=True)
+    history.add_argument("--end", required=True)
+    history.add_argument("--output", required=True, type=Path)
+    history.add_argument("--include-csindex", action="store_true", help="explicit optional CSI API peg observations; keep separate methods")
+
+    valuation = subcommands.add_parser("verify-valuation", help="verify a local independent valuation snapshot")
+    valuation.add_argument("--snapshot", required=True, type=Path)
+
     stage = subcommands.add_parser("stage-release", help="verify pins and stage an immutable legacy-reader dataset")
     stage.add_argument("--release-dir", required=True, type=Path)
     stage.add_argument("--manifest-sha256", required=True)
@@ -133,6 +143,16 @@ def _run(args: argparse.Namespace) -> int:
         output = collect_index(root=args.root, dataset_name=args.dataset, start=args.start,
             end=args.end, output=args.output, provider=args.provider)
         print(output)
+        return 0
+    if args.command == "backfill":
+        from .history import backfill
+        report = backfill(root=args.root, start=args.start, end=args.end, output=args.output, include_csindex=args.include_csindex,
+            progress=lambda code, result: print(f"{code}: price={result['price']['status']}; missing daily valuation={','.join(result['missing_daily_history'])}", file=sys.stderr))
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0 if report["status"] == "complete" else 1
+    if args.command == "verify-valuation":
+        from .valuation import verify_valuation
+        print(json.dumps(verify_valuation(args.snapshot), ensure_ascii=False, sort_keys=True, allow_nan=False))
         return 0
     if args.command == "stage-release":
         from .consumer import stage_release

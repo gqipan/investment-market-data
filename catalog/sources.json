@@ -91,5 +91,41 @@
     "usage_url": "https://www.szse.cn/api/report/exchange/onepersistenthour/monthList",
     "checked_at": "2026-10-24",
     "notes": "Independent monthly trading calendar. Local research access is enabled; calendar cloud collection, storage and redistribution require separate approval from the price provider."
+  },
+  "akshare_legulegu": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://legulegu.com/stockdata/hs300-ttm-lyr",
+    "checked_at": "2026-10-24",
+    "notes": "Local research access only. Actual frequency and methods are validated per snapshot. No cloud storage or redistribution approval."
+  },
+  "danjuan_snapshot": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://danjuanfunds.com/djapi/index_eva/dj",
+    "checked_at": "2026-10-24",
+    "notes": "Local research access only. Actual frequency and methods are validated per snapshot. No cloud storage or redistribution approval."
+  },
+  "csindex_optional_history": {
+    "status": "pending_authorization",
+    "local_collection_allowed": true,
+    "private_release_allowed": false,
+    "public_release_allowed": false,
+    "cloud_collection_allowed": false,
+    "cloud_storage_allowed": false,
+    "redistribution_allowed": false,
+    "usage_url": "https://www.csindex.com.cn/csindex-home/perf/index-perf",
+    "checked_at": "2026-10-24",
+    "notes": "Explicit optional source, never default or silent fallback. API peg retained as pe_csindex_reported/api_peg rather than relabeled Legu TTM. Local research only; cloud and redistribution disabled."
   }
 }

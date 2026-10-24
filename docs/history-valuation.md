@@ -1,0 +1,79 @@
+# 历史行情与独立估值
+
+## 运行与查看
+
+需要 Python 3.11。AkShare 是可选的采集依赖，核心校验只使用标准库。
+
+```bash
+python -m pip install '.[collection]'
+PYTHONPATH=src python -m market_data backfill \
+  --start 2005-01-01 --end 2026-10-23 \
+  --output data/local/history-run
+```
+
+默认行情来自腾讯；930955 无有效腾讯映射，只显式尝试其已登记的 AkShare/东方财富接口。估值默认尝试显式映射的 AkShare/乐咕 PE/PB，以及蛋卷匿名公开快照。创业板指不能冒用创业板50或整个创业板市场的估值。
+
+中证不是必选来源。仅显式增加 `--include-csindex` 才采集可选历史接口；`peg` 单独保存在 `pe_csindex_reported` / `api_peg`，不与乐咕 `pe_ttm` 合并。原始字段、来源和查询范围保存在各自快照中。
+
+输出必须是新目录，位于 ignored `data/` 或仓库外。每次运行保留自己的缓存与数据版本，不覆盖旧目录。匿名请求缓存包含端点、参数、正文摘要和时间，读取时复验正文；它是本地恢复证据，不是可信 Release。日历逐月共享；乐咕在单独进程中执行，整体超时180秒。
+
+打开输出下的 `coverage-report.md` 查看11指数表格，`coverage-report.json` 查看具体缺日、异常行、字段方法和错误代码。实际行情在 `<code>/price/`，独立估值在 `<code>/<source>/observations.csv`。CSV 可以直接用表格软件查看，无需每次手动下载 Release。当前真实数据留在本机，GitHub clone 只有代码与合成样例。
+
+退出0表示请求范围全部满足，1表示 partial，2表示输入或文件操作错误。单源不支持、联网失败、月度观测、缺字段或缺日都保留在报告中；partial 不等于采集器崩溃，也不允许进入生产或正式发布。
+
+## 行情质量与收盘价隔离
+
+腾讯按年取原始 `day`，保留原值，不改用复权数据。成功的完整 OHLCV 快照沿用价格打包器。
+
+发现 OHLC 关系错误时，完整 OHLCV 快照拒绝。若收盘值为有限正数、日期递增唯一且属于独立交易日历，另存 `close.csv`、`raw-bars.json` 与独立清单：
+
+- `close_only`：实际首日至请求末日的收盘序列与日历相符，OHLCV 校验仍失败。
+- `gapped_close`：保留可得收盘观测，明确记录缺日，`coverage_verified=false`。
+- 两者均为 `normalized_close` / `close-history-local-1`；不是 `bars.csv`，不进入现有 OHLCV Release/消费器，也不伪造高低价或填充缺日。
+
+请求起点与实际起点分别记录，不把上市前空白、未取得的较早历史或交易所回溯计算区间当作已证实的上线历史。相同来源的独立复取和跨源数值对照仍是后续验收项。
+
+深交所API实测漏掉2017-01-01这一周日。历史适配器仅补这一明确关闭日，记录清单与[深交所交易规则2.3.1](https://www.szse.cn/disclosure/notice/general/t20060515_499577.html)的依据；原始缓存不变，其他日期缺失仍失败。普通 `collect` 保持整月严格检查。
+
+## 估值定义与验算
+
+估值使用独立 `valuation-local-1` schema，包含 `observations.csv`、`raw.json`、`manifest.json`。每条观测为 Date、Metric、Value、Unit、Method；有哈希与内容身份，日期/指标唯一有序、值有限。缺失保持原始null，不补零。PE/PB倍数与股息率fraction分开；百分数仅在展示端换算。
+
+乐咕的滚动/静态、等权/整体/中位数分别存储。蛋卷的 `pe` 未证实为TTM，命名 `pe_reported`；`yeild` 保留fraction值，分位数另存，保留合法零值。`ts` 转上海时区日期，不能用下载日期替代观测日期。
+
+频率来自实际观测，单行始终是snapshot；实际月度为monthly_observed，不铺成日线。完整观测区间与独立交易日历相符才标 daily_calendar_verified；请求范围是否也完整由 requested_sessions_covered 和 missing_sessions 分别表示。存在非交易日期、历史中断或前段空白时如实显示。方法不同不自动拼接，源站历史分位窗口不等于已下载历史。
+
+```bash
+PYTHONPATH=src python -m market_data verify-valuation \
+  --snapshot data/local/history-run/000300/akshare_legulegu
+```
+
+独立收盘价可调用 `market_data.history.verify_close_history` 复验哈希、身份、日期与覆盖。估值和收盘价独立schema尚无正式Release打包/下载支持，不把OHLCV消费者描述成已支持它们。
+
+## 2026-10-24 实测覆盖
+
+本次请求2005-01-01至2026-10-23，状态partial。腾讯10指数共34,654条行情观测；2个完整OHLCV快照通过，8个因OHLC关系错误分离为收盘序列。3个收盘序列仍有缺日；930955东方财富不可用。
+
+| 指数 | 腾讯实际起点 | 行数 | 质量 |
+|---|---|---:|---|
+| 000300 | 2005-04-08 | 5233 | close_only，6条OHLC异常 |
+| 000510 | 2024-09-23 | 503 | OHLCV通过 |
+| 000905 | 2007-01-15 | 4804 | close_only，4条OHLC异常 |
+| 000852 | 2014-10-17 | 2921 | close_only，1条OHLC异常 |
+| 399006 | 2010-06-02 | 3979 | close_only，8条OHLC异常 |
+| 000688 | 2019-12-31 | 1649 | OHLCV通过 |
+| 000922 | 2008-07-31 | 4427 | close_only，4条OHLC异常 |
+| 000932 | 2009-07-28 | 4184 | gapped_close，缺2日，12条OHLC异常 |
+| 000991 | 2012-06-28 | 3477 | gapped_close，缺1日，1条OHLC异常 |
+| 000993 | 2012-06-28 | 3477 | gapped_close，缺1日，1条OHLC异常 |
+| 930955 | — | — | 原登记行情源不可用 |
+
+乐咕沪深300/中证500/中证1000的PE与PB分别各259/238/145个月度观测，起点2005-04-29/2007-01-31/2014-10-31，均到2026-10-23。蛋卷取得9指数当日PE/PB/股息率快照，缺A500与930955；没有完整股息率历史。
+
+可选中证历史PE字段取得10指数，其中沪深3003655条、A500514条、科创501528条、9309552300条；多数存在日历缺口或额外日期，不能宣称完整日频历史。399006未取得。原始响应还包含不能通过交易日日历验证的早期行情日期，仅保留为探测证据，没有自动替换腾讯。
+
+[AkShare官方文档](https://akshare.akfamily.xyz/data/stock/stock.html)的“全部历史”描述不能替代实测覆盖；旧韭圈儿接口已不在本次安装版本中，[维护者讨论](https://github.com/akfamily/akshare/issues/5508)也记录了旧接口移除。本次未安装旧版本或用私人数据库填补缺口。
+
+## 接入顺序
+
+先补齐来源与缺口，并冻结方法、频率和数据质量；再给独立估值与close schema实现正式版本包。私人应用主动读取固定版本到独立缓存，研究端只读，估值按截至研究日可见的观测对齐，展示原始频率与陈旧程度，不冒用未来数据或公开日期未知的回填历史。当前不写私人数据库、生产指标缓存或有效版本指针，不启用自动同步。
