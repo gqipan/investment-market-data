@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .consumer import stage_release
+from .general_release import stage_snapshot_release
 
 METADATA_LIMIT = 1024 * 1024
 ASSET_LIMIT = 50 * 1024 * 1024
@@ -52,6 +53,52 @@ def fetch_release(*, repository: str, release_id: str, expected_manifest_sha256:
                   expected_dataset_id: str, cache_dir: Path, allow_synthetic: bool = False,
                   download=read_https) -> Path:
     """Install a fixed public version; never change a pointer or request credentials."""
+    with tempfile.TemporaryDirectory(prefix='market-release-download-') as temp:
+        directory = _download_release(
+            repository=repository,
+            release_id=release_id,
+            expected_manifest_sha256=expected_manifest_sha256,
+            expected_dataset_id=expected_dataset_id,
+            destination=Path(temp) / release_id,
+            allow_synthetic=allow_synthetic,
+            download=download,
+        )
+        return stage_release(release_dir=directory,
+            expected_manifest_sha256=expected_manifest_sha256,
+            expected_dataset_id=expected_dataset_id,
+            cache_dir=cache_dir,
+            allow_synthetic=allow_synthetic)
+
+
+def fetch_snapshot_release(*, repository: str, release_id: str,
+                           expected_manifest_sha256: str,
+                           expected_dataset_id: str,
+                           expected_data_class: str,
+                           cache_dir: Path, download=read_https) -> Path:
+    """Download and install one pinned close or valuation release."""
+    with tempfile.TemporaryDirectory(prefix='market-snapshot-download-') as temp:
+        directory = _download_release(
+            repository=repository,
+            release_id=release_id,
+            expected_manifest_sha256=expected_manifest_sha256,
+            expected_dataset_id=expected_dataset_id,
+            destination=Path(temp) / release_id,
+            allow_synthetic=False,
+            download=download,
+        )
+        return stage_snapshot_release(
+            release_dir=directory,
+            expected_manifest_sha256=expected_manifest_sha256,
+            expected_dataset_id=expected_dataset_id,
+            expected_data_class=expected_data_class,
+            cache_dir=cache_dir,
+        )
+
+
+def _download_release(*, repository: str, release_id: str,
+                      expected_manifest_sha256: str, expected_dataset_id: str,
+                      destination: Path,
+                      allow_synthetic: bool, download) -> Path:
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9][A-Za-z0-9._-]*', repository):
         raise ValueError('invalid GitHub repository')
     if not re.fullmatch(r'data-\d{4}-\d{2}-\d{2}-[A-Za-z0-9_-]+-r[1-9]\d*', release_id):
@@ -114,11 +161,8 @@ def fetch_release(*, repository: str, release_id: str, expected_manifest_sha256:
             raise ValueError('synthetic data requires explicit smoke-test mode')
     elif manifest.get('publication_eligible') is not True:
         raise ValueError('release is not eligible for public consumption')
-    with tempfile.TemporaryDirectory(prefix='market-release-download-') as temp:
-        directory = Path(temp) / release_id
-        directory.mkdir()
-        (directory / 'release-manifest.json').write_bytes(raw)
-        for name in sorted(set(by_name) - {'release-manifest.json'}):
-            (directory / name).write_bytes(read_asset(name))
-        return stage_release(release_dir=directory, expected_manifest_sha256=expected_manifest_sha256,
-            expected_dataset_id=expected_dataset_id, cache_dir=cache_dir, allow_synthetic=allow_synthetic)
+    destination.mkdir()
+    (destination / 'release-manifest.json').write_bytes(raw)
+    for name in sorted(set(by_name) - {'release-manifest.json'}):
+        (destination / name).write_bytes(read_asset(name))
+    return destination

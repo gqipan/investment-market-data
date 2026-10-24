@@ -74,6 +74,22 @@ class CatalogTests(unittest.TestCase):
             ):
                 validate_catalog(root)
 
+    def test_catalog_rejects_duplicate_json_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = self._copy_catalog(temp)
+            path = root / "catalog" / "sources.json"
+            raw = path.read_text(encoding="utf-8")
+            path.write_text(
+                raw.replace(
+                    '"tencent_raw": {',
+                    '"tencent_raw": {},\n  "tencent_raw": {',
+                    1,
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "duplicate JSON key"):
+                validate_catalog(root)
+
 
 if __name__ == "__main__":
     unittest.main()

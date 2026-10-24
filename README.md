@@ -5,10 +5,11 @@
 ## 当前可用能力
 
 - 11 个指数已登记独立身份、价格与估值数据集。
-- 价格默认使用腾讯原始日线 `tencent_raw`，无需中证官网；930955 暂无可用腾讯映射；可显式选择 `akshare_eastmoney`，经 AkShare 调用东方财富不复权指数日线。
+- 价格默认使用腾讯原始日线 `tencent_raw`，无需中证官网；930955 没有可用腾讯映射，目录已改登记为 `akshare_eastmoney` 并保留“线上可取性待复核”状态。
 - `backfill` 批量回补历史和独立估值，输出逐指数覆盖、频率、缺日与错误报告。
 - 本地 `collect` 命令生成独立快照，包含行情、独立交易日历、实际来源、单位、日期、SHA-256 和内容身份。
 - 支持合成样例或真实本地快照生成候选包；验算检查文件白名单、压缩包、隐私、哈希、行数和交易日覆盖。
+- 完整 OHLCV、独立收盘价和估值观测现在都有固定身份 Release 路径；投资系统消费器会按调用方预先锁定的清单哈希、数据集 ID 和数据类型复验后安装。
 - `release-check` 额外检查当前来源权限、真实 Git commit、代码一致性、干净工作树和仓库文件白名单。合成数据始终不能正式发布。
 - 每日 Actions 只做测试、隐私和 catalog 检查，不进行未获准的云端取数或上传真实数据。
 
@@ -64,6 +65,24 @@ PYTHONPATH=src python -m market_data verify-release \
   --release-dir dist/data-2026-10-23-tencent_raw-r1
 ```
 
+独立收盘价或估值观测：
+
+```bash
+PYTHONPATH=src python -m market_data build-snapshot-release \
+  --dataset csi300-normalized-v1 \
+  --snapshot data/local/history-run/000300/price \
+  --as-of 2026-10-23 --revision 1 --output dist
+PYTHONPATH=src python -m market_data verify-release \
+  --release-dir dist/data-2026-10-23-tencent_raw-r1
+
+PYTHONPATH=src python -m market_data build-snapshot-release \
+  --dataset csi300-valuation-v1 \
+  --snapshot data/local/history-run/000300/akshare_legulegu \
+  --as-of 2026-10-23 --revision 1 --output dist
+PYTHONPATH=src python -m market_data verify-release \
+  --release-dir dist/data-2026-10-23-akshare_legulegu-r1
+```
+
 合成测试样例：
 
 ```bash
@@ -77,7 +96,12 @@ PYTHONPATH=src python -m market_data verify-release \
 
 ## 私人应用接入
 
-已提供 `stage-release` 和匿名 `fetch-release`：调用方锁定不可变正式 tag、清单哈希和数据集 ID 后，下载并生成不可变的消费缓存，将国内研究 CLI 所需的 `CN` 转为 `A`，保留上游身份。`shadow-check` 对照固定消费缓存，默认要求至少 900 个交易日；六日验收样本不能当作 850 日均线历史。所有命令均不切换生产指针或写业务数据库。生产任务编排、缓存适配、五个交易日影子对照和估值接入的边界见[消费端接入契约](docs/consumer-integration.md)。
+已提供两套匿名固定版本消费路径：
+
+- 完整 OHLCV：`stage-release` / `fetch-release`，生成国内研究 CLI 所需的 `market=A` 兼容缓存。
+- 独立收盘价与估值：`stage-snapshot-release` / `fetch-snapshot-release`，原样保留 schema、来源、方法、单位和频率。
+
+调用方必须锁定不可变 tag、清单哈希、数据集 ID 和数据类型。`shadow-check` 对照固定行情缓存，默认要求至少 900 个交易日；六日验收样本不能当作 850 日均线历史。所有命令均不切换生产指针或写业务数据库。生产任务、缓存适配、五个交易日影子对照和估值导入边界见[消费端接入契约](docs/consumer-integration.md)。
 
 ## 发布边界
 

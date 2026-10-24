@@ -88,14 +88,14 @@
   },
   "dividend-low-vol-100-price-v1": {
     "instrument": "dividend_low_vol_100",
-    "source": "tencent_raw",
-    "dataset_key": "index.cn.csi.930955.price.tencent_raw",
+    "source": "akshare_eastmoney",
+    "dataset_key": "index.cn.csi.930955.price.akshare_eastmoney",
     "data_class": "normalized_price",
     "label": "Dividend Low Volatility 100 normalized daily price index",
     "bars_file": null,
     "calendar_file": null,
-    "volume_unit": "tencent_lots",
-    "adapter": "tencent_raw-v1"
+    "volume_unit": "eastmoney_lots",
+    "adapter": "akshare_eastmoney-v1"
   },
   "csi-consumer-price-v1": {
     "instrument": "csi_consumer",
@@ -136,7 +136,8 @@
     "dataset_key": "index.cn.csi.000300.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI 300 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -146,7 +147,8 @@
     "dataset_key": "index.cn.csi.000510.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI A500 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -156,7 +158,8 @@
     "dataset_key": "index.cn.csi.000905.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI 500 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -166,7 +169,8 @@
     "dataset_key": "index.cn.csi.000852.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI 1000 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -176,7 +180,8 @@
     "dataset_key": "index.cn.szse.399006.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "ChiNext raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -186,7 +191,8 @@
     "dataset_key": "index.cn.csi.000688.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "STAR 50 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -196,7 +202,8 @@
     "dataset_key": "index.cn.csi.000922.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI Dividend raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -206,7 +213,8 @@
     "dataset_key": "index.cn.csi.930955.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "Dividend Low Volatility 100 raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -216,7 +224,8 @@
     "dataset_key": "index.cn.csi.000932.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI Consumer raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -226,7 +235,8 @@
     "dataset_key": "index.cn.csi.000991.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI All Share Healthcare raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   },
@@ -236,7 +246,8 @@
     "dataset_key": "index.cn.csi.000993.valuation.normalized",
     "data_class": "valuation_observation",
     "label": "CSI All Share Information Technology raw valuation observations",
-    "fields": ["trade_date", "pe_ttm", "pb", "dividend_yield"],
+    "fields": ["Date", "Metric", "Value", "Unit", "Method"],
+    "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
   }
