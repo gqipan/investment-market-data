@@ -144,6 +144,78 @@ class CumulativeTests(unittest.TestCase):
                 )
             self.assertFalse((root / "cumulative-2").exists())
 
+    def test_materialize_merges_same_source_batches_for_private_research(self):
+        from market_data.cumulative import (
+            build_cumulative,
+            materialize_cumulative,
+            verify_registry_cache,
+        )
+        from market_data.release import _json_bytes, dataset_identity
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first = root / "cumulative-1"
+            build_cumulative(
+                delta_dir=self._batch(root / "baseline-source", "1"),
+                output_dir=first,
+                as_of="2026-10-22",
+            )
+            delta = self._batch(root / "delta-source", "2")
+            snapshot = delta / "price-2"
+            bars = snapshot / "bars.csv"
+            calendar = snapshot / "calendar.csv"
+            bars.write_text(
+                bars.read_text() + "2026-10-23,101,102,100,101.5,20\n",
+                encoding="utf-8",
+            )
+            calendar.write_text(
+                calendar.read_text() + "2026-10-23,true\n",
+                encoding="utf-8",
+            )
+            meta = json.loads((snapshot / "manifest.json").read_text())
+            meta.pop("dataset_id")
+            meta.update(
+                requested_end="2026-10-23",
+                expected_sessions=[
+                    "2026-10-16",
+                    "2026-10-19",
+                    "2026-10-20",
+                    "2026-10-21",
+                    "2026-10-22",
+                    "2026-10-23",
+                ],
+                row_count=6,
+                last_date="2026-10-23",
+                sha256=hashlib.sha256(bars.read_bytes()).hexdigest(),
+                calendar_sha256=hashlib.sha256(calendar.read_bytes()).hexdigest(),
+            )
+            meta["dataset_id"] = dataset_identity(meta)
+            (snapshot / "manifest.json").write_bytes(_json_bytes(meta))
+
+            second = root / "cumulative-2"
+            build_cumulative(
+                delta_dir=delta,
+                output_dir=second,
+                as_of="2026-10-23",
+                previous_dir=first,
+                previous_release="data-2026-10-22-r1",
+                previous_archive_sha256="a" * 64,
+            )
+            result = materialize_cumulative(second, root / "private")
+            registry = json.loads(result["registry"].read_text())
+            self.assertEqual(result["expected_session"], "2026-10-23")
+            self.assertEqual(len(registry["datasets"]), 1)
+            entry = registry["datasets"][0]
+            self.assertEqual(entry["source"], "test_source")
+            materialized = result["registry"].parent / entry["cache_name"]
+            from market_data.quality import read_bars
+
+            self.assertEqual(len(read_bars(materialized / "bars.csv")), 6)
+            verify_registry_cache(
+                result["registry"].parent,
+                result["registry"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -111,6 +111,36 @@ class TransportTests(unittest.TestCase):
             with patch.object(Response,'geturl',return_value='http://github.com/file'):
                 with self.assertRaisesRegex(ValueError,'HTTPS'):read_https(self.base+'file',10)
 
+    def test_http_reader_uses_json_accept_for_github_api(self):
+        from market_data.transport import read_https
+
+        class Response:
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def geturl(self):
+                return url
+
+            def read(self, limit):
+                return b'{}'
+
+        seen = []
+
+        class Opener:
+            def open(self, request, timeout):
+                seen.append((url, request.get_header('Accept')))
+                return Response()
+
+        url = 'https://api.github.com/repos/example/market/releases/latest'
+        with patch('market_data.transport.build_opener', return_value=Opener()):
+            self.assertEqual(read_https(url, 10), b'{}')
+        self.assertEqual(seen, [(url, 'application/vnd.github+json')])
+
     def test_non_public_real_manifest_is_rejected_before_remaining_downloads(self):
         m=json.loads(self.raw);m['data_class']='normalized_price';m['publication_eligible']=False
         raw=json.dumps(m).encode();(self.release/'release-manifest.json').write_bytes(raw)

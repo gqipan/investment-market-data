@@ -34,8 +34,15 @@ class _Redirects(HTTPRedirectHandler):
 def read_https(url: str, limit: int) -> bytes:
     validate_download_url(url)
     try:
-        request = Request(url, headers={'User-Agent':'investment-market-data-consumer',
-                                       'Accept':'application/octet-stream'})
+        accept = (
+            'application/vnd.github+json'
+            if urlsplit(url).hostname == 'api.github.com'
+            else 'application/octet-stream'
+        )
+        request = Request(url, headers={
+            'User-Agent': 'investment-market-data-consumer',
+            'Accept': accept,
+        })
         with build_opener(_Redirects()).open(request, timeout=20) as response:
             validate_download_url(response.geturl())
             if int(response.headers.get('Content-Length', '0')) > limit:
