@@ -14,6 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 
 from .collection import (
     CALENDAR_URL,
@@ -93,12 +94,20 @@ class HistoricalCalendarRequest:
     Raw cache remains unchanged. Unknown omissions still fail strict validation.
     SZSE trading rules 2.3.1 limit trading days to Monday through Friday.
     """
-    def __init__(self, request):
+    def __init__(self, request, min_interval=0.0):
         self.request = request
         self.repairs = []
         self.lock = threading.Lock()
+        self.min_interval = min_interval
+        self.last_request_at = 0.0
 
     def __call__(self, url, params):
+        if self.min_interval > 0:
+            with self.lock:
+                wait = self.min_interval - (time.monotonic() - self.last_request_at)
+                if wait > 0:
+                    time.sleep(wait)
+                self.last_request_at = time.monotonic()
         payload = self.request(url, params)
         if url == CALENDAR_URL and params == {'month': '2017-01'} and isinstance(payload, dict):
             rows = payload.get('data')
@@ -386,7 +395,10 @@ def backfill(*, root: Path, start: str, end: str, output: Path, request=request_
     watchlist = json.loads((root / 'catalog/watchlist.json').read_text())['symbols']
     selected = [(key, item) for key, item in instruments.items() if item['symbol'] in watchlist]
     output.mkdir(parents=True)
-    cached = HistoricalCalendarRequest(CachedRequest(output / 'request-cache', request))
+    cached = HistoricalCalendarRequest(
+        CachedRequest(output / 'request-cache', request),
+        min_interval=0.25,
+    )
     report = {'schema_version': 'history-coverage-1', 'status': 'partial',
               'requested_start': start, 'requested_end': end,
               'generated_at': datetime.now(timezone.utc).isoformat(), 'indices': [],
@@ -473,7 +485,9 @@ def backfill(*, root: Path, start: str, end: str, output: Path, request=request_
             progress(code, result)
         return result
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    # Public providers rate-limit bursts. A full-history backfill is I/O heavy
+    # enough that serial collection is both more reliable and auditable.
+    with ThreadPoolExecutor(max_workers=1) as pool:
         for result in pool.map(one, selected):
             report['indices'].append(result)
             # Checkpoint successful siblings even when a later provider is slow.

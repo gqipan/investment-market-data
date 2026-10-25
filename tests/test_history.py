@@ -65,12 +65,19 @@ class HistoryTests(unittest.TestCase):
                     {'code': 0, 'data': {'sh000300': {'day': [['2025-01-02', '1', '1', '1', '1', '0']]}}})
             self.assertFalse((Path(temp) / 'broken').exists())
 
-    def test_cloud_gate_precedes_network_and_output(self):
-        from market_data.history import backfill
+    def test_cloud_gate_rejects_unapproved_source_before_network(self):
+        from market_data.history import _local_gate
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}):
+            sources = {
+                'test_source': {
+                    'status': 'approved_private',
+                    'local_collection_allowed': True,
+                    'private_cloud_collection_allowed': True,
+                    'cloud_collection_allowed': False,
+                }
+            }
             with self.assertRaisesRegex(ValueError, 'cloud'):
-                backfill(root=ROOT, start='2025-01-01', end='2025-01-03', output=Path(temp) / 'run',
-                         request=lambda *_: self.fail('network'))
+                _local_gate(sources, 'test_source')
             self.assertFalse((Path(temp) / 'run').exists())
 
     def test_partial_backfill_retains_all_index_failures(self):

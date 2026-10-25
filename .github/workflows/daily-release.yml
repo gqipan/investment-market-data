@@ -1,0 +1,179 @@
+name: daily index release
+
+on:
+  schedule:
+    # 21:40 Asia/Shanghai, after the A-share close. GitHub cron uses UTC.
+    - cron: "40 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Optional trading date for a manual backfill (YYYY-MM-DD)"
+        required: false
+        type: string
+      bootstrap:
+        description: "Build the first full-history baseline instead of a daily delta"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - name: Collect public index history and publish an immutable release
+        env:
+          PYTHONPATH: src
+          GH_TOKEN: ${{ github.token }}
+          AS_OF_INPUT: ${{ inputs.as_of }}
+          BOOTSTRAP_INPUT: ${{ inputs.bootstrap }}
+        run: |
+          set -euo pipefail
+          AS_OF="${AS_OF_INPUT:-$(TZ=Asia/Shanghai date +%F)}"
+          python - "${AS_OF}" <<'PY'
+          import calendar
+          import sys
+          from datetime import date
+
+          from market_data.collection import fetch_calendar
+
+          day = date.fromisoformat(sys.argv[1])
+          month_start = day.replace(day=1)
+          month_end = day.replace(day=calendar.monthrange(day.year, day.month)[1])
+          sessions = fetch_calendar(month_start, month_end)
+          if day not in sessions:
+              print(f"{day.isoformat()} is not an A-share trading day; no release created")
+              sys.exit(0)
+          print(f"{day.isoformat()} is a verified trading day")
+          PY
+          RUN="data/daily-${AS_OF}"
+          TAG="data-${AS_OF}-r1"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "release ${TAG} already exists; leaving it unchanged"
+            exit 0
+          fi
+
+          BOOTSTRAP="${BOOTSTRAP_INPUT:-false}"
+          PREVIOUS_DIR=""
+          PREVIOUS_TAG=""
+          PREVIOUS_SHA256=""
+          if [ "${BOOTSTRAP}" = "true" ]; then
+            START="2005-01-01"
+            echo "building the first full-history baseline"
+          else
+            PREVIOUS_TAG="$(gh release list --limit 50 --json tagName,isDraft,isPrerelease --jq '[.[] | select(.isDraft == false and .isPrerelease == false and (.tagName | startswith("data-")))] | sort_by(.tagName) | reverse | .[0].tagName // ""')"
+            if [ -z "${PREVIOUS_TAG}" ]; then
+              echo "no cumulative baseline release exists; run workflow_dispatch with bootstrap=true" >&2
+              exit 1
+            fi
+            mkdir -p previous-release
+            gh release download "${PREVIOUS_TAG}" \
+              --pattern 'index-data-cumulative-*.tar.gz' \
+              --dir previous-release
+            gh release download "${PREVIOUS_TAG}" \
+              --pattern SHA256SUMS \
+              --dir previous-release
+            (
+              cd previous-release
+              sha256sum -c --ignore-missing SHA256SUMS
+            )
+            PREVIOUS_ARCHIVE="$(find previous-release -maxdepth 1 -name 'index-data-cumulative-*.tar.gz' -print -quit)"
+            PREVIOUS_SHA256="$(sha256sum "${PREVIOUS_ARCHIVE}" | awk '{print $1}')"
+            PREVIOUS_DIR="previous-cumulative"
+            mkdir -p "${PREVIOUS_DIR}"
+            tar -xzf "${PREVIOUS_ARCHIVE}" -C "${PREVIOUS_DIR}"
+            python - "${PREVIOUS_DIR}" <<'PY'
+          import sys
+          from pathlib import Path
+
+          from market_data.cumulative import verify_cumulative
+
+          manifest = verify_cumulative(Path(sys.argv[1]))
+          print(f"verified previous cumulative release through {manifest['as_of']}")
+          PY
+            START="${AS_OF}"
+            echo "appending ${AS_OF} to ${PREVIOUS_TAG}"
+          fi
+
+          python -m market_data backfill \
+            --start "${START}" \
+            --end "${AS_OF}" \
+            --output "${RUN}" \
+            --include-csindex \
+            --allow-partial
+          python - "${RUN}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          run = Path(sys.argv[1])
+          report = json.loads((run / "coverage-report.json").read_text())
+          available = [
+              row for row in report["indices"]
+              if row["price"].get("status") in {"available", "close_only", "gapped_close"}
+          ]
+          if not available:
+              raise SystemExit("no price history was collected; refusing to create a release")
+          current = [
+              row for row in available
+              if row["price"].get("last_date") == report["requested_end"]
+          ]
+          if len(current) < 9:
+              raise SystemExit(
+                  f"only {len(current)} price histories reached "
+                  f"{report['requested_end']}; refusing to publish a stale release"
+              )
+          print(
+              f"coverage status={report['status']}; "
+              f"price histories={len(available)}/{len(report['indices'])}; "
+              f"current-session histories={len(current)}"
+          )
+          PY
+
+          CUMULATIVE="data/cumulative-${AS_OF}"
+          if [ "${BOOTSTRAP}" = "true" ]; then
+            python -m market_data build-cumulative \
+              --delta-dir "${RUN}" \
+              --output-dir "${CUMULATIVE}" \
+              --as-of "${AS_OF}"
+          else
+            python -m market_data build-cumulative \
+              --delta-dir "${RUN}" \
+              --output-dir "${CUMULATIVE}" \
+              --as-of "${AS_OF}" \
+              --previous-dir "${PREVIOUS_DIR}" \
+              --previous-release "${PREVIOUS_TAG}" \
+              --previous-archive-sha256 "${PREVIOUS_SHA256}"
+          fi
+
+          mkdir -p dist
+          DELTA_ARCHIVE="dist/index-data-delta-${AS_OF}.tar.gz"
+          CUMULATIVE_ARCHIVE="dist/index-data-cumulative-${AS_OF}.tar.gz"
+          tar -czf "${DELTA_ARCHIVE}" \
+            --exclude="./request-cache" \
+            -C "${RUN}" .
+          tar -czf "${CUMULATIVE_ARCHIVE}" -C "${CUMULATIVE}" .
+          (
+            cd dist
+            sha256sum ./*.tar.gz > SHA256SUMS
+          )
+          gh release create "${TAG}" \
+            --target "${GITHUB_SHA}" \
+            --title "Index data ${AS_OF}" \
+            --draft \
+            --notes "Owner-approved public index price, calendar, and valuation cumulative snapshot. Every release contains the baseline plus all appended trading-day batches; the previous archive hash is recorded in cumulative-manifest.json. Private ledgers are excluded. The coverage report records source gaps; this is not a claim that every valuation field is complete. Corrections require a new revision." \
+            "${CUMULATIVE_ARCHIVE}" \
+            "${DELTA_ARCHIVE}" \
+            dist/SHA256SUMS \
+            "${RUN}/coverage-report.json" \
+            "${RUN}/coverage-report.md"
+          gh release edit "${TAG}" --draft=false

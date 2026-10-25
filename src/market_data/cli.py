@@ -70,6 +70,29 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("--end", required=True)
     history.add_argument("--output", required=True, type=Path)
     history.add_argument("--include-csindex", action="store_true", help="explicit optional CSI API peg observations; keep separate methods")
+    history.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help="publish a snapshot with explicit gaps only when coverage-report.json records them",
+    )
+
+    cumulative = subcommands.add_parser(
+        "build-cumulative",
+        help="append a verified daily batch to a cumulative release tree",
+    )
+    cumulative.add_argument("--delta-dir", required=True, type=Path)
+    cumulative.add_argument("--output-dir", required=True, type=Path)
+    cumulative.add_argument("--as-of", required=True)
+    cumulative.add_argument("--previous-dir", type=Path)
+    cumulative.add_argument("--previous-release")
+    cumulative.add_argument("--previous-archive-sha256")
+
+    registry_verify = subcommands.add_parser(
+        "verify-registry-cache",
+        help="verify every content-addressed dataset referenced by a local registry",
+    )
+    registry_verify.add_argument("--root", required=True, type=Path)
+    registry_verify.add_argument("--registry", required=True, type=Path)
 
     valuation = subcommands.add_parser("verify-valuation", help="verify a local independent valuation snapshot")
     valuation.add_argument("--snapshot", required=True, type=Path)
@@ -201,10 +224,27 @@ def _run(args: argparse.Namespace) -> int:
         report = backfill(root=args.root, start=args.start, end=args.end, output=args.output, include_csindex=args.include_csindex,
             progress=lambda code, result: print(f"{code}: price={result['price']['status']}; missing daily valuation={','.join(result['missing_daily_history'])}", file=sys.stderr))
         print(json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False))
-        return 0 if report["status"] == "complete" else 1
+        return 0 if report["status"] == "complete" or args.allow_partial else 1
     if args.command == "verify-valuation":
         from .valuation import verify_valuation
         print(json.dumps(verify_valuation(args.snapshot), ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0
+    if args.command == "build-cumulative":
+        from .cumulative import build_cumulative
+        manifest = build_cumulative(
+            delta_dir=args.delta_dir,
+            output_dir=args.output_dir,
+            as_of=args.as_of,
+            previous_dir=args.previous_dir,
+            previous_release=args.previous_release,
+            previous_archive_sha256=args.previous_archive_sha256,
+        )
+        print(json.dumps(manifest, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0
+    if args.command == "verify-registry-cache":
+        from .cumulative import verify_registry_cache
+        counts = verify_registry_cache(args.root, args.registry)
+        print(json.dumps(counts, ensure_ascii=False, sort_keys=True))
         return 0
     if args.command == "stage-release":
         from .consumer import stage_release
