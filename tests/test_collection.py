@@ -27,10 +27,17 @@ class CollectionTests(unittest.TestCase):
         self.addCleanup(local.stop)
 
     def test_cloud_collection_is_blocked_before_network(self):
-        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}):
-            with tempfile.TemporaryDirectory() as temp:
+        import shutil
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / 'project'
+            shutil.copytree(ROOT / 'catalog', root / 'catalog')
+            path = root / 'catalog/sources.json'
+            sources = json.loads(path.read_text())
+            sources['tencent_raw']['cloud_collection_allowed'] = False
+            path.write_text(json.dumps(sources))
+            with patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}):
                 with self.assertRaisesRegex(ValueError, "cloud collection"):
-                    collection.collect_index(root=ROOT, dataset_name='csi300-normalized-v1',
+                    collection.collect_index(root=root, dataset_name='csi300-normalized-v1',
                         start='2026-10-19', end='2026-10-20', output=Path(temp)/'snapshot',
                         request=lambda *_: self.fail('network'))
 
@@ -50,6 +57,7 @@ class CollectionTests(unittest.TestCase):
             path=root/'catalog/sources.json'
             sources=json.loads(path.read_text())
             sources['tencent_raw']['cloud_collection_allowed']=True
+            sources['szse_calendar']['cloud_collection_allowed']=False
             path.write_text(json.dumps(sources))
             with patch.dict(os.environ, {'GITHUB_ACTIONS':'true'}):
                 with self.assertRaisesRegex(ValueError, 'calendar'):
@@ -76,7 +84,7 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(manifest['row_count'], 2)
             self.assertEqual(manifest['calendar_id'], 'szse-month-calendar')
             self.assertIn('100.123', (target/'bars.csv').read_text())
-            self.assertFalse(manifest['publication_eligible'])
+            self.assertTrue(manifest['publication_eligible'])
             self.assertTrue(any('monthList' in url for url,_ in calls))
 
     def test_collected_snapshot_can_build_verified_candidate(self):
@@ -94,7 +102,7 @@ class CollectionTests(unittest.TestCase):
             manifest = verify_release(release)
             self.assertEqual(manifest['source']['id'], 'tencent_raw')
             self.assertEqual(manifest['data_class'], 'normalized_price')
-            self.assertFalse(manifest['publication_eligible'])
+            self.assertTrue(manifest['publication_eligible'])
 
     def test_calendar_gap_prevents_any_snapshot(self):
         def request(url, params):
@@ -178,7 +186,7 @@ class CollectionTests(unittest.TestCase):
             self.assertEqual(manifest['source'], 'sina_raw')
             self.assertEqual(manifest['dataset_id'], manifest['dataset_id'])
             self.assertEqual(manifest['row_count'], 2)
-            self.assertFalse(manifest['publication_eligible'])
+            self.assertTrue(manifest['publication_eligible'])
             self.assertTrue((target / 'bars.csv').is_file())
             self.assertTrue(any(params.get('datalen') == 2000 for _, params in calls))
 
