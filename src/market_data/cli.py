@@ -94,6 +94,12 @@ def build_parser() -> argparse.ArgumentParser:
     registry_verify.add_argument("--root", required=True, type=Path)
     registry_verify.add_argument("--registry", required=True, type=Path)
 
+    delta_verify = subcommands.add_parser(
+        "verify-delta-tree",
+        help="verify every price, close, and valuation dataset in a collected batch",
+    )
+    delta_verify.add_argument("--root", required=True, type=Path)
+
     valuation = subcommands.add_parser("verify-valuation", help="verify a local independent valuation snapshot")
     valuation.add_argument("--snapshot", required=True, type=Path)
 
@@ -244,6 +250,11 @@ def _run(args: argparse.Namespace) -> int:
     if args.command == "verify-registry-cache":
         from .cumulative import verify_registry_cache
         counts = verify_registry_cache(args.root, args.registry)
+        print(json.dumps(counts, ensure_ascii=False, sort_keys=True))
+        return 0
+    if args.command == "verify-delta-tree":
+        from .cumulative import verify_delta_tree
+        counts = verify_delta_tree(args.root)
         print(json.dumps(counts, ensure_ascii=False, sort_keys=True))
         return 0
     if args.command == "stage-release":

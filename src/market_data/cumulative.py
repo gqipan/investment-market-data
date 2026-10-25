@@ -151,6 +151,84 @@ def verify_registry_cache(root: Path, registry_path: Path) -> dict[str, int]:
     return {"datasets": len(entries), **counts}
 
 
+def _verify_price_snapshot(path: Path) -> dict[str, Any]:
+    """Verify one normalized-price snapshot before it enters a cumulative release."""
+    if path.is_symlink() or any(
+        (path / name).is_symlink()
+        for name in ("bars.csv", "calendar.csv", "manifest.json")
+    ):
+        raise ValueError("price snapshot symlinks are forbidden")
+    if {item.name for item in path.iterdir()} != {
+        "bars.csv",
+        "calendar.csv",
+        "manifest.json",
+    }:
+        raise ValueError("unexpected price snapshot files")
+    meta = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+    if (
+        meta.get("data_class") != "normalized_price"
+        or meta.get("synthetic") is not False
+    ):
+        raise ValueError("unknown or synthetic price snapshot")
+    if meta.get("dataset_id") != dataset_identity(meta):
+        raise ValueError("price snapshot identity mismatch")
+    if _sha256(path / "bars.csv") != meta.get("sha256"):
+        raise ValueError("price snapshot bars hash mismatch")
+    if _sha256(path / "calendar.csv") != meta.get("calendar_sha256"):
+        raise ValueError("price snapshot calendar hash mismatch")
+    bars = read_bars(path / "bars.csv")
+    calendar = read_calendar(path / "calendar.csv")
+    validate_coverage(bars, calendar)
+    if (
+        [day.isoformat() for day in calendar] != meta.get("expected_sessions")
+        or len(bars) != meta.get("row_count")
+        or bars[0].day.isoformat() != meta.get("first_date")
+        or bars[-1].day.isoformat() != meta.get("last_date")
+        or meta.get("coverage_verified") is not True
+        or meta.get("missing_sessions") != []
+    ):
+        raise ValueError("price snapshot metadata coverage mismatch")
+    requested_start = date.fromisoformat(meta["requested_start"])
+    requested_end = date.fromisoformat(meta["requested_end"])
+    if any(not requested_start <= day <= requested_end for day in calendar):
+        raise ValueError("price snapshot calendar is outside the requested range")
+    return meta
+
+
+def verify_delta_tree(root: Path) -> dict[str, int]:
+    """Verify every dataset manifest in a collected daily or baseline batch."""
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("delta root must be a real directory")
+    counts = {
+        "normalized_price": 0,
+        "normalized_close": 0,
+        "valuation_observation": 0,
+    }
+    manifests = sorted(
+        path
+        for path in root.rglob("manifest.json")
+        if "request-cache" not in path.relative_to(root).parts
+    )
+    if not manifests:
+        raise ValueError("delta batch has no dataset manifests")
+    for manifest_path in manifests:
+        snapshot = manifest_path.parent
+        meta = json.loads(manifest_path.read_text(encoding="utf-8"))
+        data_class = meta.get("data_class")
+        if data_class == "normalized_price":
+            _verify_price_snapshot(snapshot)
+        elif data_class == "normalized_close":
+            from .history import verify_close_history
+
+            verify_close_history(snapshot)
+        elif data_class == "valuation_observation":
+            verify_valuation(snapshot)
+        else:
+            raise ValueError(f"unknown dataset class in delta batch: {data_class}")
+        counts[data_class] += 1
+    return {"datasets": len(manifests), **counts}
+
+
 def build_cumulative(
     *,
     delta_dir: Path,
@@ -167,6 +245,7 @@ def build_cumulative(
     if output_dir.exists():
         raise FileExistsError("cumulative output already exists")
     output_dir.parent.mkdir(parents=True, exist_ok=True)
+    verify_delta_tree(delta_dir)
 
     if previous_dir is None:
         if previous_release is not None or previous_archive_sha256 is not None:

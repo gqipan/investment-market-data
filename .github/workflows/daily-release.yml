@@ -110,6 +110,7 @@ jobs:
             --output "${RUN}" \
             --include-csindex \
             --allow-partial
+          python -m market_data verify-delta-tree --root "${RUN}"
           python - "${RUN}" <<'PY'
           import json
           import sys
