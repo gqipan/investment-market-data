@@ -1,6 +1,8 @@
 import hashlib
+import io
 import json
 from pathlib import Path
+import tarfile
 import tempfile
 import unittest
 
@@ -143,6 +145,57 @@ class CumulativeTests(unittest.TestCase):
                     previous_archive_sha256="c" * 64,
                 )
             self.assertFalse((root / "cumulative-2").exists())
+
+    def test_safe_extract_ignores_macos_metadata_and_verifies_archive(self):
+        from market_data.cumulative import (
+            build_cumulative,
+            extract_cumulative_archive,
+            verify_cumulative,
+        )
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            cumulative = root / "cumulative"
+            build_cumulative(
+                delta_dir=self._batch(root / "source", "1"),
+                output_dir=cumulative,
+                as_of="2026-10-23",
+            )
+            archive = root / "cumulative.tar.gz"
+            with tarfile.open(archive, "w:gz") as handle:
+                handle.add(cumulative, arcname=".", recursive=False)
+                for path in sorted(cumulative.rglob("*")):
+                    handle.add(
+                        path,
+                        arcname=f"./{path.relative_to(cumulative)}",
+                        recursive=False,
+                    )
+                payload = b"\x00\x05\x16\x07"
+                metadata = tarfile.TarInfo("._cumulative-manifest.json")
+                metadata.size = len(payload)
+                handle.addfile(metadata, io.BytesIO(payload))
+
+            extracted = root / "extracted"
+            extract_cumulative_archive(archive, extracted)
+
+            self.assertFalse((extracted / "._cumulative-manifest.json").exists())
+            self.assertEqual(verify_cumulative(extracted)["as_of"], "2026-10-23")
+
+    def test_safe_extract_rejects_path_traversal(self):
+        from market_data.cumulative import extract_cumulative_archive
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive = root / "unsafe.tar.gz"
+            payload = b"escape"
+            with tarfile.open(archive, "w:gz") as handle:
+                member = tarfile.TarInfo("../escape.txt")
+                member.size = len(payload)
+                handle.addfile(member, io.BytesIO(payload))
+
+            with self.assertRaisesRegex(ValueError, "unsafe"):
+                extract_cumulative_archive(archive, root / "extracted")
+            self.assertFalse((root.parent / "escape.txt").exists())
 
     def test_materialize_merges_same_source_batches_for_private_research(self):
         from market_data.cumulative import (
