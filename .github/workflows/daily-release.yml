@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           AS_OF="${AS_OF_INPUT:-$(TZ=Asia/Shanghai date +%F)}"
-          python - "${AS_OF}" <<'PY'
+          if python - "${AS_OF}" <<'PY'
           import calendar
           import sys
           from datetime import date
@@ -51,10 +51,20 @@ jobs:
           month_end = day.replace(day=calendar.monthrange(day.year, day.month)[1])
           sessions = fetch_calendar(month_start, month_end)
           if day not in sessions:
-              print(f"{day.isoformat()} is not an A-share trading day; no release created")
-              sys.exit(0)
+              sys.exit(3)
           print(f"{day.isoformat()} is a verified trading day")
           PY
+          then
+            :
+          else
+            calendar_status=$?
+            if [ "${calendar_status}" -eq 3 ]; then
+              echo "${AS_OF} is not an A-share trading day; no release created"
+              exit 0
+            fi
+            echo "calendar verification failed with exit ${calendar_status}" >&2
+            exit "${calendar_status}"
+          fi
           RUN="data/daily-${AS_OF}"
           TAG="data-${AS_OF}-r1"
           if gh release view "${TAG}" >/dev/null 2>&1; then
