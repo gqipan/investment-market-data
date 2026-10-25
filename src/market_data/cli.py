@@ -87,6 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
     cumulative.add_argument("--previous-release")
     cumulative.add_argument("--previous-archive-sha256")
 
+    materialize = subcommands.add_parser(
+        "materialize-cumulative",
+        help="merge ordered cumulative batches into current research snapshots",
+    )
+    materialize.add_argument("--root", required=True, type=Path)
+    materialize.add_argument("--output", required=True, type=Path)
+
     registry_verify = subcommands.add_parser(
         "verify-registry-cache",
         help="verify every content-addressed dataset referenced by a local registry",
@@ -246,6 +253,19 @@ def _run(args: argparse.Namespace) -> int:
             previous_archive_sha256=args.previous_archive_sha256,
         )
         print(json.dumps(manifest, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0
+    if args.command == "materialize-cumulative":
+        from .cumulative import materialize_cumulative
+        result = materialize_cumulative(args.root, args.output)
+        print(json.dumps(
+            {
+                "datasets": result["datasets"],
+                "expected_session": result["expected_session"],
+                "registry": str(result["registry"]),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        ))
         return 0
     if args.command == "verify-registry-cache":
         from .cumulative import verify_registry_cache

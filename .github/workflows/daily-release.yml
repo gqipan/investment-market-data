@@ -184,6 +184,9 @@ jobs:
               --previous-release "${PREVIOUS_TAG}" \
               --previous-archive-sha256 "${PREVIOUS_SHA256}"
           fi
+          python -m market_data materialize-cumulative \
+            --root "${CUMULATIVE}" \
+            --output "data/materialized-${TARGET_AS_OF}"
 
           mkdir -p dist
           DELTA_ARCHIVE="dist/index-data-delta-${TARGET_AS_OF}.tar.gz"

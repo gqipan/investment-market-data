@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import csv
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
+import tempfile
 from typing import Any
 
 from .privacy import scan_privacy
-from .quality import read_bars, read_calendar, validate_coverage
+from .quality import Bar, read_bars, read_calendar, validate_coverage
 from .release import _json_bytes, dataset_identity
 from .valuation import verify_valuation
 
@@ -149,6 +151,277 @@ def verify_registry_cache(root: Path, registry_path: Path) -> dict[str, int]:
             raise ValueError(f"registry cache privacy failure: {cache_name}")
         counts[data_class] += 1
     return {"datasets": len(entries), **counts}
+
+
+def _batch_snapshots(root: Path, batches: list[dict[str, Any]]) -> dict[tuple, list[tuple[str, Path, dict]]]:
+    """Return verified snapshots grouped by logical route in batch order."""
+    grouped: dict[tuple[str, str, str], list[tuple[str, Path, dict]]] = {}
+    root = root.resolve()
+    for batch in batches:
+        batch_path = (root / batch["path"]).resolve()
+        if not batch_path.is_relative_to(root) or not batch_path.is_dir():
+            raise ValueError("cumulative batch path is invalid")
+        verify_delta_tree(batch_path)
+        snapshots = sorted(
+            path
+            for path in batch_path.rglob("manifest.json")
+            if "request-cache" not in path.relative_to(batch_path).parts
+        )
+        seen: set[tuple[str, str, str]] = set()
+        for manifest_path in snapshots:
+            snapshot = manifest_path.parent
+            meta = json.loads(manifest_path.read_text(encoding="utf-8"))
+            route = (meta["symbol"], meta["source"], meta["data_class"])
+            if route in seen:
+                raise ValueError(
+                    f"cumulative batch contains duplicate route: {route[0]}/{route[1]}/{route[2]}"
+                )
+            seen.add(route)
+            grouped.setdefault(route, []).append((batch["as_of"], snapshot, meta))
+    return grouped
+
+
+def _merge_price_snapshots(
+    snapshots: list[tuple[str, Path, dict]],
+    target: Path,
+) -> dict[str, Any]:
+    """Merge adjacent same-source batches into one verified price snapshot."""
+    bars_by_day: dict[date, Bar] = {}
+    sessions_by_day: dict[date, bool] = {}
+    for _, snapshot, meta in snapshots:
+        for bar in read_bars(snapshot / "bars.csv"):
+            current = bars_by_day.get(bar.day)
+            if current is not None and current != bar:
+                raise ValueError(f"overlapping price rows differ on {bar.day.isoformat()}")
+            bars_by_day[bar.day] = bar
+        for day in read_calendar(snapshot / "calendar.csv"):
+            sessions_by_day[day] = True
+    bars = [bars_by_day[day] for day in sorted(bars_by_day)]
+    sessions = sorted(sessions_by_day)
+    validate_coverage(bars, sessions)
+    target.mkdir()
+    from .release import _write_bars, _write_calendar
+
+    _write_bars(target / "bars.csv", bars)
+    _write_calendar(target / "calendar.csv", sessions)
+    meta = dict(snapshots[-1][2])
+    meta.pop("dataset_id", None)
+    meta.update(
+        requested_start=min(item[2]["requested_start"] for item in snapshots),
+        requested_end=max(item[2]["requested_end"] for item in snapshots),
+        expected_sessions=[day.isoformat() for day in sessions],
+        missing_sessions=[],
+        coverage_verified=True,
+        coverage_unverified=False,
+        row_count=len(bars),
+        first_date=bars[0].day.isoformat(),
+        last_date=bars[-1].day.isoformat(),
+        sha256=_sha256(target / "bars.csv"),
+        calendar_sha256=_sha256(target / "calendar.csv"),
+    )
+    meta["dataset_id"] = dataset_identity(meta)
+    (target / "manifest.json").write_bytes(_json_bytes(meta))
+    _verify_price_snapshot(target)
+    return meta
+
+
+def _merge_close_snapshots(
+    snapshots: list[tuple[str, Path, dict]],
+    target: Path,
+) -> dict[str, Any]:
+    """Merge close-only batches without inventing OHLC fields."""
+    closes: dict[str, float] = {}
+    raw_rows: dict[str, list] = {}
+    expected: set[str] = set()
+    anomalies: dict[str, dict] = {}
+    errata: set[str] = set()
+    for _, snapshot, meta in snapshots:
+        with (snapshot / "close.csv").open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                day = date.fromisoformat(row["Date"]).isoformat()
+                value = float(row["Close"])
+                current = closes.get(day)
+                if current is not None and current != value:
+                    raise ValueError(f"overlapping close rows differ on {day}")
+                closes[day] = value
+        raw = json.loads((snapshot / "raw-bars.json").read_text(encoding="utf-8"))
+        for row in raw.get("rows", []):
+            if not isinstance(row, list) or not row:
+                raise ValueError("invalid raw close-history row")
+            day = date.fromisoformat(str(row[0])[:10]).isoformat()
+            current = raw_rows.get(day)
+            if current is not None and current != row:
+                raise ValueError(f"overlapping raw close-history rows differ on {day}")
+            raw_rows[day] = row
+        expected.update(meta["expected_sessions"])
+        for item in meta.get("ohlc_anomalies", []):
+            anomalies[item["date"]] = item
+        errata.update(
+            (meta.get("calendar_errata") or {}).get("closed_dates", [])
+        )
+    if not raw_rows:
+        raise ValueError("normalized close history has no raw rows")
+    target.mkdir()
+    with (target / "close.csv").open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(["Date", "Close"])
+        writer.writerows(
+            (day, format(closes[day], ".15g")) for day in sorted(closes)
+        )
+    (target / "raw-bars.json").write_bytes(
+        _json_bytes({"rows": [raw_rows[day] for day in sorted(raw_rows)]})
+    )
+    days = sorted(closes)
+    missing = sorted(expected - set(days))
+    meta = dict(snapshots[-1][2])
+    meta.pop("dataset_id", None)
+    latest_errata = dict(meta.get("calendar_errata") or {})
+    latest_errata["closed_dates"] = sorted(errata)
+    meta.update(
+        requested_start=min(item[2]["requested_start"] for item in snapshots),
+        requested_end=max(item[2]["requested_end"] for item in snapshots),
+        first_date=days[0],
+        last_date=days[-1],
+        row_count=len(days),
+        expected_sessions=sorted(expected),
+        missing_sessions=missing,
+        coverage_verified=not missing,
+        ohlc_anomalies=[anomalies[day] for day in sorted(anomalies)],
+        calendar_errata=latest_errata,
+        files={
+            name: _sha256(target / name)
+            for name in ("close.csv", "raw-bars.json")
+        },
+    )
+    meta["dataset_id"] = dataset_identity(meta)
+    (target / "manifest.json").write_bytes(_json_bytes(meta))
+    from .history import verify_close_history
+
+    verify_close_history(target)
+    return meta
+
+
+def _merge_valuation_snapshots(
+    snapshots: list[tuple[str, Path, dict]],
+    target: Path,
+) -> dict[str, Any]:
+    """Merge same-source observations and reject conflicting overlapping values."""
+    observations: dict[tuple[str, str], dict[str, str]] = {}
+    raw_batches = []
+    sessions: set[str] = set()
+    versions = []
+    for batch_as_of, snapshot, meta in snapshots:
+        with (snapshot / "observations.csv").open(encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                key = (row["Date"], row["Metric"])
+                current = observations.get(key)
+                if current is not None and current != row:
+                    raise ValueError(
+                        f"overlapping valuation rows differ on {row['Date']}/{row['Metric']}"
+                    )
+                observations[key] = row
+        raw_batches.append({
+            "as_of": batch_as_of,
+            "dataset_id": meta["dataset_id"],
+            "raw": json.loads((snapshot / "raw.json").read_text(encoding="utf-8")),
+        })
+        sessions.update(meta.get("calendar_sessions") or [])
+        if meta.get("library_version"):
+            versions.append(str(meta["library_version"]))
+    rows = [observations[key] for key in sorted(observations)]
+    from .valuation import write_valuation
+
+    write_valuation(
+        target,
+        rows,
+        symbol=snapshots[-1][2]["symbol"],
+        source=snapshots[-1][2]["source"],
+        raw={"batches": raw_batches},
+        requested_start=min(item[2]["requested_start"] for item in snapshots),
+        requested_end=max(item[2]["requested_end"] for item in snapshots),
+        library_version=versions[-1] if versions else None,
+        sessions=sorted(sessions) or None,
+    )
+    return json.loads((target / "manifest.json").read_text(encoding="utf-8"))
+
+
+def materialize_cumulative(root: Path, output_dir: Path) -> dict[str, Any]:
+    """Combine ordered batches into current snapshots and a private research registry."""
+    root = root.resolve()
+    output_dir = output_dir.resolve()
+    source_manifest = verify_cumulative(root)
+    if output_dir.exists():
+        raise FileExistsError("materialized cumulative output already exists")
+    grouped = _batch_snapshots(root, source_manifest["batches"])
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".materialized-cumulative-", dir=output_dir.parent) as temp:
+        staging = Path(temp) / "output"
+        staging.mkdir()
+        datasets = staging
+        entries = []
+        for route in sorted(grouped):
+            snapshots = grouped[route]
+            data_class = route[2]
+            working = Path(temp) / "working"
+            if len(snapshots) == 1:
+                shutil.copytree(snapshots[0][1], working)
+            elif data_class == "normalized_price":
+                _merge_price_snapshots(snapshots, working)
+            elif data_class == "normalized_close":
+                _merge_close_snapshots(snapshots, working)
+            elif data_class == "valuation_observation":
+                _merge_valuation_snapshots(snapshots, working)
+            else:
+                raise ValueError(f"unknown data class: {data_class}")
+            raw = (working / "manifest.json").read_bytes()
+            cache_name = hashlib.sha256(raw).hexdigest()
+            meta = json.loads(raw)
+            final = datasets / cache_name
+            if final.exists():
+                raise ValueError(f"materialized dataset hash collision: {cache_name}")
+            os.replace(working, final)
+            entry = {
+                "symbol": meta["symbol"],
+                "source": meta["source"],
+                "data_class": meta["data_class"],
+                "cache_name": cache_name,
+                "manifest_sha256": cache_name,
+                "dataset_id": meta["dataset_id"],
+            }
+            if meta.get("history_start") is not None:
+                entry["history_start"] = meta["history_start"]
+            entries.append(entry)
+        registry = {
+            "schema_version": "local-research-registry-1",
+            "promotion_allowed": False,
+            "expected_session": source_manifest["as_of"],
+            "datasets": entries,
+            "usage": "local_research_only",
+        }
+        preview = _write_registry_preview(staging, registry)
+        verify_registry_cache(datasets, preview)
+        preview.unlink()
+        _write_json_atomic(staging / "registry.json", registry)
+        os.replace(staging, output_dir)
+    return {
+        "root": output_dir,
+        "registry": output_dir / "registry.json",
+        "expected_session": source_manifest["as_of"],
+        "datasets": len(entries),
+    }
+
+
+def _write_registry_preview(root: Path, registry: dict[str, Any]) -> Path:
+    path = root / ".registry-preview.json"
+    path.write_bytes(_json_bytes(registry))
+    return path
+
+
+def _write_json_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_bytes(_json_bytes(value))
+    os.replace(temporary, path)
 
 
 def _verify_price_snapshot(path: Path) -> dict[str, Any]:
