@@ -1,5 +1,11 @@
 # 数据政策
 
+## 数据用途声明
+
+本项目整理的市场数据仅供个人学习与非商业的私人研究，不用于商业数据服务，不构成投资建议。数据权利归实际权利人所有，使用须遵守各来源条款；本项目不授予超出上游许可的商业使用或再分发权。代码 MIT 许可不覆盖数据。
+
+私人研究是预期用途，不代表公开 GitHub Release 只对私人可见，也不替代自动采集、云端保存或公开分发所需的来源依据。仓库所有者批准和 catalog 权限开关是项目内部的发布决策，不等同于上游权利人的授权证明。
+
 ## 代码托管与数据范围
 
 通用采集代码可公开托管；数据是否分发按实际上游单独决定。指数编制方不指定采集接口，也不决定整个代码仓库的可见性。AkShare 是接口库，来源登记须继续保留实际上游。
@@ -20,12 +26,12 @@
 
 本项目当前把两种范围分开：
 
-- `approved_private` + `private_release_allowed` + `cloud_collection_allowed` + `cloud_storage_allowed`：可以进入项目所有者控制的私人 Release 或服务器内容寻址缓存。
+- 状态为 `approved_private` 或 `approved_public`，且允许 `private_release_allowed` 及私人云采集与保存：可以进入项目所有者控制的私人 Release 或服务器内容寻址缓存。
 - `approved_public` + 四个公开开关：才可以上传公开 Release 或向匿名用户分发。
 
-私人缓存不提交 Git。私人服务器部署、固定版本同步和交易日对照由消费端执行；数据仓库工作流不得因为来源改为 `approved_private` 就上传真实数据。
+私人缓存不提交 Git。私人服务器部署、固定版本同步和交易日对照由消费端执行；公开发布工作流不得因为来源改为 `approved_private` 就上传真实数据。
 
-状态为 `approved_private` 或 `approved_public`，并且 `private_release_allowed`、`cloud_collection_allowed`、`cloud_storage_allowed` 均为真时，才允许进入私有 Release。
+状态为 `approved_private` 或 `approved_public` 且 `private_release_allowed=true` 时，还须允许私人云采集与保存：优先读取 `private_cloud_collection_allowed`、`private_cloud_storage_allowed`；对应专属字段不存在时，才分别回退到 `cloud_collection_allowed`、`cloud_storage_allowed`。专属字段显式为 false 时不会被公共字段覆盖。
 
 ### 公开发布
 
