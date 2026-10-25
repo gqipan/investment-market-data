@@ -1,6 +1,6 @@
 # 数据来源审批清单
 
-每个拟发布数据集必须保留可审计的来源依据。审批人需要确认下列事项，而不是只确认“页面能打开”。
+每个拟发布数据集必须保留可审计的来源依据。审批人需要确认下列事项，而不是只确认“页面能打开”。本页记录登记流程；具体生效状态以 [sources.json](../catalog/sources.json) 为准。
 
 ## 来源身份
 
@@ -27,14 +27,14 @@
 
 ## 私有发布结论
 
-只有下列字段同时满足，才允许把来源状态改为 `approved_private`：
+私人发布接受 `approved_private` 或 `approved_public`。下例使用专属私人云字段；字段存在时优先读取，未登记时才回退公共 `cloud_collection_allowed` / `cloud_storage_allowed`：
 
 ```json
 {
   "status": "approved_private",
   "private_release_allowed": true,
-  "cloud_collection_allowed": true,
-  "cloud_storage_allowed": true
+  "private_cloud_collection_allowed": true,
+  "private_cloud_storage_allowed": true
 }
 ```
 
@@ -56,6 +56,8 @@
 
 ## 采集与发布分别登记
 
-`local_collection_allowed` 只控制本地研究采集。`tencent_raw` 和 `akshare_eastmoney` 已接入本地价格采集，但 `status` 仍为 `pending_authorization`，不代表已经批准云端访问或分发。中证指数编制方身份不能替代实际腾讯／东方财富上游登记。
+`local_collection_allowed` 控制本地研究采集，不能代替云端或再分发开关。2026-10-25 当前使用的腾讯、新浪、东方财富、中证行情、深交所交易日历、乐咕、蛋卷和中证估值来源均已登记所有者的 `approved_public` 批准及相关开关。`szse_official` 和估值占位来源仍为 `pending_authorization`，第三方 `githubltf_csi300` 为 `restricted`；不得把某些来源获准理解成全 catalog 放行。
+
+批准记录是本项目的用途登记和内部发布决策，不等同于上游权利人的授权证明。“仅供私人研究”的用途声明、中证指数编制方身份、AkShare 软件许可和可访问网页都不能替代实际腾讯／东方财富等上游依据。
 
 公开发布还需 `cloud_storage_allowed: true`；发布时重新核查当前开关，旧候选不保留已撤销的授权。
