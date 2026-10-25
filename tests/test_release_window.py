@@ -80,6 +80,94 @@ class ReleaseWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "upper bound"):
             next_release_window("2026-10-23", "not-a-date", request=calendar_request)
 
+    def test_established_symbols_must_all_reach_target(self):
+        from market_data.release_window import validate_current_coverage
+
+        report = {
+            "requested_end": "2026-10-23",
+            "indices": [
+                {
+                    "symbol": "000300",
+                    "price": {
+                        "status": "available",
+                        "last_date": "2026-10-23",
+                    },
+                },
+                {
+                    "symbol": "000932",
+                    "price": {
+                        "status": "available",
+                        "last_date": "2026-10-23",
+                    },
+                },
+                {
+                    "symbol": "930955",
+                    "price": {
+                        "status": "unavailable",
+                    },
+                },
+            ],
+        }
+
+        checked = validate_current_coverage(
+            report,
+            expected_symbols={"000300", "000932"},
+        )
+
+        self.assertEqual(checked["expected_symbols"], ["000300", "000932"])
+        self.assertEqual(checked["current_symbols"], ["000300", "000932"])
+
+    def test_delayed_established_symbol_blocks_publication_for_retry(self):
+        from market_data.release_window import validate_current_coverage
+
+        report = {
+            "requested_end": "2026-10-23",
+            "indices": [
+                {
+                    "symbol": "000300",
+                    "price": {
+                        "status": "gapped_close",
+                        "last_date": "2026-10-22",
+                    },
+                },
+                {
+                    "symbol": "000932",
+                    "price": {
+                        "status": "available",
+                        "last_date": "2026-10-23",
+                    },
+                },
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "000300=gapped_close:2026-10-22"):
+            validate_current_coverage(
+                report,
+                expected_symbols={"000300", "000932"},
+            )
+
+    def test_established_symbol_temporarily_unavailable_blocks_publication(self):
+        from market_data.release_window import validate_current_coverage
+
+        report = {
+            "requested_end": "2026-10-23",
+            "indices": [
+                {
+                    "symbol": "000300",
+                    "price": {
+                        "status": "unavailable",
+                        "reason_code": "source_unavailable",
+                    },
+                }
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "000300=unavailable:unknown"):
+            validate_current_coverage(
+                report,
+                expected_symbols={"000300"},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
