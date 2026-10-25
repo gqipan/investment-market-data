@@ -2,8 +2,11 @@ name: daily index release
 
 on:
   schedule:
-    # 21:40 Asia/Shanghai, after the A-share close. GitHub cron uses UTC.
-    - cron: "40 13 * * 1-5"
+    # Three daily checks catch delayed upstream sessions without creating empty releases.
+    # GitHub cron uses UTC. The 09:00 run only considers sessions through yesterday.
+    - cron: "40 13 * * *" # 21:40 Asia/Shanghai
+    - cron: "40 15 * * *" # 23:40 Asia/Shanghai
+    - cron: "0 1 * * *"   # 09:00 Asia/Shanghai
   workflow_dispatch:
     inputs:
       as_of:
@@ -38,38 +41,18 @@ jobs:
           BOOTSTRAP_INPUT: ${{ inputs.bootstrap }}
         run: |
           set -euo pipefail
-          AS_OF="${AS_OF_INPUT:-$(TZ=Asia/Shanghai date +%F)}"
-          if python - "${AS_OF}" <<'PY'
-          import calendar
-          import sys
-          from datetime import date
-
-          from market_data.collection import fetch_calendar
-
-          day = date.fromisoformat(sys.argv[1])
-          month_start = day.replace(day=1)
-          month_end = day.replace(day=calendar.monthrange(day.year, day.month)[1])
-          sessions = fetch_calendar(month_start, month_end)
-          if day not in sessions:
-              sys.exit(3)
-          print(f"{day.isoformat()} is a verified trading day")
-          PY
-          then
-            :
+          NOW_DATE="$(TZ=Asia/Shanghai date +%F)"
+          NOW_HOUR="$(TZ=Asia/Shanghai date +%H)"
+          if [ -n "${AS_OF_INPUT}" ]; then
+            UPPER_BOUND="${AS_OF_INPUT}"
+          elif [ "$((10#${NOW_HOUR}))" -lt 16 ]; then
+            UPPER_BOUND="$(TZ=Asia/Shanghai date -d "${NOW_DATE} -1 day" +%F)"
           else
-            calendar_status=$?
-            if [ "${calendar_status}" -eq 3 ]; then
-              echo "${AS_OF} is not an A-share trading day; no release created"
-              exit 0
-            fi
-            echo "calendar verification failed with exit ${calendar_status}" >&2
-            exit "${calendar_status}"
+            UPPER_BOUND="${NOW_DATE}"
           fi
-          RUN="data/daily-${AS_OF}"
-          TAG="data-${AS_OF}-r1"
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            echo "release ${TAG} already exists; leaving it unchanged"
-            exit 0
+          if [[ "${UPPER_BOUND}" > "${NOW_DATE}" ]]; then
+            echo "upper bound ${UPPER_BOUND} is later than today ${NOW_DATE}" >&2
+            exit 1
           fi
 
           BOOTSTRAP="${BOOTSTRAP_INPUT:-false}"
@@ -77,14 +60,49 @@ jobs:
           PREVIOUS_TAG=""
           PREVIOUS_SHA256=""
           if [ "${BOOTSTRAP}" = "true" ]; then
+            WINDOW="$(python -m market_data.release_window latest --upper-bound "${UPPER_BOUND}")"
+            TARGET_AS_OF="$(jq -r '.target' <<<"${WINDOW}")"
             START="2005-01-01"
-            echo "building the first full-history baseline"
+            echo "building the first full-history baseline through ${TARGET_AS_OF}"
           else
-            PREVIOUS_TAG="$(gh release list --limit 50 --json tagName,isDraft,isPrerelease --jq '[.[] | select(.isDraft == false and .isPrerelease == false and (.tagName | startswith("data-")))] | sort_by(.tagName) | reverse | .[0].tagName // ""')"
-            if [ -z "${PREVIOUS_TAG}" ]; then
+            PREVIOUS="$(gh release list --limit 100 \
+              --json tagName,isDraft,isPrerelease,publishedAt \
+              --jq '[
+                .[]
+                | select(
+                    .isDraft == false
+                    and .isPrerelease == false
+                    and (.tagName | test("^data-[0-9]{4}-[0-9]{2}-[0-9]{2}-r[1-9][0-9]*$"))
+                  )
+              ] | sort_by(.publishedAt) | last
+                | if . == null then empty else [.tagName, .publishedAt] | @tsv end')"
+            if [ -z "${PREVIOUS}" ]; then
               echo "no cumulative baseline release exists; run workflow_dispatch with bootstrap=true" >&2
               exit 1
             fi
+            IFS=$'\t' read -r PREVIOUS_TAG PREVIOUS_PUBLISHED_AT <<<"${PREVIOUS}"
+            PREVIOUS_AS_OF="${PREVIOUS_TAG:5:10}"
+            WINDOW="$(python -m market_data.release_window next \
+              --previous-as-of "${PREVIOUS_AS_OF}" \
+              --upper-bound "${UPPER_BOUND}")"
+            WINDOW_STATUS="$(jq -r '.status' <<<"${WINDOW}")"
+            if [ "${WINDOW_STATUS}" = "noop" ]; then
+              echo "no un-released A-share session exists after ${PREVIOUS_AS_OF} through ${UPPER_BOUND}"
+              exit 0
+            fi
+            START="$(jq -r '.start' <<<"${WINDOW}")"
+            TARGET_AS_OF="$(jq -r '.target' <<<"${WINDOW}")"
+            echo "latest release ${PREVIOUS_TAG} ends at ${PREVIOUS_AS_OF}; collecting ${START} through ${TARGET_AS_OF}"
+          fi
+
+          RUN="data/daily-${TARGET_AS_OF}"
+          TAG="data-${TARGET_AS_OF}-r1"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "release ${TAG} already exists but is not the latest cumulative release; refusing to replace it" >&2
+            exit 1
+          fi
+
+          if [ "${BOOTSTRAP}" != "true" ]; then
             mkdir -p previous-release
             gh release download "${PREVIOUS_TAG}" \
               --pattern 'index-data-cumulative-*.tar.gz' \
@@ -101,22 +119,23 @@ jobs:
             PREVIOUS_DIR="previous-cumulative"
             mkdir -p "${PREVIOUS_DIR}"
             tar -xzf "${PREVIOUS_ARCHIVE}" -C "${PREVIOUS_DIR}"
-            python - "${PREVIOUS_DIR}" <<'PY'
+            python - "${PREVIOUS_DIR}" "${PREVIOUS_AS_OF}" <<'PY'
           import sys
           from pathlib import Path
 
           from market_data.cumulative import verify_cumulative
 
           manifest = verify_cumulative(Path(sys.argv[1]))
+          if manifest["as_of"] != sys.argv[2]:
+              raise ValueError("previous release manifest date does not match its tag")
           print(f"verified previous cumulative release through {manifest['as_of']}")
           PY
-            START="${AS_OF}"
-            echo "appending ${AS_OF} to ${PREVIOUS_TAG}"
+            echo "appending ${START} through ${TARGET_AS_OF} to ${PREVIOUS_TAG}"
           fi
 
           python -m market_data backfill \
             --start "${START}" \
-            --end "${AS_OF}" \
+            --end "${TARGET_AS_OF}" \
             --output "${RUN}" \
             --include-csindex \
             --allow-partial
@@ -150,25 +169,25 @@ jobs:
           )
           PY
 
-          CUMULATIVE="data/cumulative-${AS_OF}"
+          CUMULATIVE="data/cumulative-${TARGET_AS_OF}"
           if [ "${BOOTSTRAP}" = "true" ]; then
             python -m market_data build-cumulative \
               --delta-dir "${RUN}" \
               --output-dir "${CUMULATIVE}" \
-              --as-of "${AS_OF}"
+              --as-of "${TARGET_AS_OF}"
           else
             python -m market_data build-cumulative \
               --delta-dir "${RUN}" \
               --output-dir "${CUMULATIVE}" \
-              --as-of "${AS_OF}" \
+              --as-of "${TARGET_AS_OF}" \
               --previous-dir "${PREVIOUS_DIR}" \
               --previous-release "${PREVIOUS_TAG}" \
               --previous-archive-sha256 "${PREVIOUS_SHA256}"
           fi
 
           mkdir -p dist
-          DELTA_ARCHIVE="dist/index-data-delta-${AS_OF}.tar.gz"
-          CUMULATIVE_ARCHIVE="dist/index-data-cumulative-${AS_OF}.tar.gz"
+          DELTA_ARCHIVE="dist/index-data-delta-${TARGET_AS_OF}.tar.gz"
+          CUMULATIVE_ARCHIVE="dist/index-data-cumulative-${TARGET_AS_OF}.tar.gz"
           tar -czf "${DELTA_ARCHIVE}" \
             --exclude="./request-cache" \
             -C "${RUN}" .
@@ -179,9 +198,9 @@ jobs:
           )
           gh release create "${TAG}" \
             --target "${GITHUB_SHA}" \
-            --title "Index data ${AS_OF}" \
+            --title "Index data ${TARGET_AS_OF}" \
             --draft \
-            --notes "Owner-approved public index price, calendar, and valuation cumulative snapshot. Every release contains the baseline plus all appended trading-day batches; the previous archive hash is recorded in cumulative-manifest.json. Private ledgers are excluded. The coverage report records source gaps; this is not a claim that every valuation field is complete. Corrections require a new revision." \
+            --notes "Owner-approved public index price, calendar, and valuation cumulative snapshot. Every release contains the baseline plus all appended closed-session batches; delayed sessions are caught up before publication. The previous archive hash is recorded in cumulative-manifest.json. Private ledgers are excluded. The coverage report records source gaps; this is not a claim that every valuation field is complete. Corrections require a new revision." \
             "${CUMULATIVE_ARCHIVE}" \
             "${DELTA_ARCHIVE}" \
             dist/SHA256SUMS \

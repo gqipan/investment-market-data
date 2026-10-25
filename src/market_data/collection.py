@@ -53,7 +53,13 @@ def request_json(url: str, params: dict):
             time.sleep(attempt + 1)
 
 
-def fetch_calendar(start: date, end: date, *, request=request_json) -> list[date]:
+def fetch_calendar(
+    start: date,
+    end: date,
+    *,
+    request=request_json,
+    allow_empty: bool = False,
+) -> list[date]:
     sessions = []
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
@@ -75,7 +81,7 @@ def fetch_calendar(start: date, end: date, *, request=request_json) -> list[date
         if observed != expected:
             raise ValueError("independent calendar month is incomplete")
         year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-    if not sessions:
+    if not sessions and not allow_empty:
         raise ValueError("requested range has no verified trading sessions")
     return sorted(sessions)
 

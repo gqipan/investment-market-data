@@ -150,6 +150,21 @@ class HistoryCliTests(unittest.TestCase):
         self.assertTrue(run.called)
 
 class CalendarErratumTests(unittest.TestCase):
+    def test_verified_closed_range_can_return_no_sessions(self):
+        from market_data.collection import fetch_calendar
+        def request(url, params):
+            return {'data': [
+                {'jyrq': f'2026-10-{day:02d}', 'jybz': '1' if day in {19, 20, 21, 22, 23} else '0'}
+                for day in range(1, 32)
+            ]}
+        sessions = fetch_calendar(
+            date(2026, 10, 24),
+            date(2026, 10, 25),
+            request=request,
+            allow_empty=True,
+        )
+        self.assertEqual(sessions, [])
+
     def test_only_documented_closed_day_can_be_supplemented(self):
         from market_data.history import HistoricalCalendarRequest
         from market_data.collection import CALENDAR_URL, fetch_calendar
