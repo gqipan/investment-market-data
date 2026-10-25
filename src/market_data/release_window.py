@@ -6,7 +6,7 @@ import argparse
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 import json
-from typing import Callable
+from typing import Any, Callable
 
 from .collection import fetch_calendar, request_json
 
@@ -18,6 +18,9 @@ class ReleaseWindow:
     start: str
     target: str
     sessions: tuple[str, ...]
+
+
+PRICE_STATUSES = {"available", "close_only", "gapped_close"}
 
 
 def _parse_day(value: str, label: str) -> date:
@@ -77,6 +80,68 @@ def latest_session_on_or_before(
         target=target.isoformat(),
         sessions=(target.isoformat(),),
     )
+
+
+def validate_current_coverage(
+    report: dict[str, Any],
+    *,
+    expected_symbols: set[str] | None = None,
+) -> dict[str, Any]:
+    """Fail unless every established index reached the requested target session.
+
+    A symbol that was present in the previous cumulative release stays part of
+    the contract. Temporary source failures therefore stop publication and are
+    retried by the next scheduled run instead of silently advancing the release.
+    New unsupported mappings are not imposed retroactively.
+    """
+    requested_end = report.get("requested_end")
+    rows = report.get("indices")
+    if not isinstance(requested_end, str) or not isinstance(rows, list):
+        raise ValueError("coverage report is missing requested_end or indices")
+    _parse_day(requested_end, "requested coverage end")
+    expected = set(expected_symbols or set())
+    if any(not isinstance(symbol, str) for symbol in expected):
+        raise ValueError("expected symbols must be strings")
+
+    by_symbol: dict[str, dict[str, Any]] = {}
+    current_symbols: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("symbol"), str):
+            raise ValueError("coverage report contains an invalid index row")
+        symbol = row["symbol"]
+        if symbol in by_symbol:
+            raise ValueError(f"coverage report contains duplicate symbol: {symbol}")
+        by_symbol[symbol] = row
+        price = row.get("price")
+        if not isinstance(price, dict):
+            continue
+        status = price.get("status")
+        if status in PRICE_STATUSES and price.get("last_date") == requested_end:
+            current_symbols.add(symbol)
+
+    missing = sorted(expected - current_symbols)
+    if missing:
+        details = []
+        for symbol in missing:
+            price = (by_symbol.get(symbol) or {}).get("price")
+            if not isinstance(price, dict):
+                details.append(f"{symbol}=missing-row")
+                continue
+            status = price.get("status", "unknown")
+            last_date = price.get("last_date", "unknown")
+            details.append(f"{symbol}={status}:{last_date}")
+        raise ValueError(
+            "established price series did not reach "
+            f"{requested_end}: {', '.join(details)}"
+        )
+    if not current_symbols:
+        raise ValueError("no price history reached requested coverage end")
+    return {
+        "status": "pass",
+        "requested_end": requested_end,
+        "expected_symbols": sorted(expected),
+        "current_symbols": sorted(current_symbols),
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

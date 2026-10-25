@@ -130,6 +130,9 @@ jobs:
               raise ValueError("previous release manifest date does not match its tag")
           print(f"verified previous cumulative release through {manifest['as_of']}")
           PY
+            python -m market_data materialize-cumulative \
+              --root "${PREVIOUS_DIR}" \
+              --output "data/previous-materialized"
             echo "appending ${START} through ${TARGET_AS_OF} to ${PREVIOUS_TAG}"
           fi
 
@@ -140,32 +143,33 @@ jobs:
             --include-csindex \
             --allow-partial
           python -m market_data verify-delta-tree --root "${RUN}"
-          python - "${RUN}" <<'PY'
+          python - "${RUN}" "${PREVIOUS_DIR:+data/previous-materialized/registry.json}" <<'PY'
           import json
           import sys
           from pathlib import Path
 
+          from market_data.release_window import validate_current_coverage
+
           run = Path(sys.argv[1])
           report = json.loads((run / "coverage-report.json").read_text())
-          available = [
-              row for row in report["indices"]
-              if row["price"].get("status") in {"available", "close_only", "gapped_close"}
-          ]
-          if not available:
-              raise SystemExit("no price history was collected; refusing to create a release")
-          current = [
-              row for row in available
-              if row["price"].get("last_date") == report["requested_end"]
-          ]
-          if len(current) < 9:
-              raise SystemExit(
-                  f"only {len(current)} price histories reached "
-                  f"{report['requested_end']}; refusing to publish a stale release"
-              )
+          expected_symbols = set()
+          registry_arg = sys.argv[2]
+          if registry_arg:
+              registry = json.loads(Path(registry_arg).read_text())
+              expected_symbols = {
+                  entry["symbol"]
+                  for entry in registry.get("datasets", [])
+                  if entry.get("data_class") in {"normalized_price", "normalized_close"}
+              }
+          checked = validate_current_coverage(
+              report,
+              expected_symbols=expected_symbols,
+          )
           print(
               f"coverage status={report['status']}; "
-              f"price histories={len(available)}/{len(report['indices'])}; "
-              f"current-session histories={len(current)}"
+              f"price histories={len(checked['current_symbols'])}/"
+              f"{len(report['indices'])}; "
+              f"established-symbol gate={len(checked['expected_symbols'])}"
           )
           PY
 
