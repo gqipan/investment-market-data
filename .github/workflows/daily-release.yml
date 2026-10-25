@@ -117,8 +117,9 @@ jobs:
             PREVIOUS_ARCHIVE="$(find previous-release -maxdepth 1 -name 'index-data-cumulative-*.tar.gz' -print -quit)"
             PREVIOUS_SHA256="$(sha256sum "${PREVIOUS_ARCHIVE}" | awk '{print $1}')"
             PREVIOUS_DIR="previous-cumulative"
-            mkdir -p "${PREVIOUS_DIR}"
-            tar -xzf "${PREVIOUS_ARCHIVE}" -C "${PREVIOUS_DIR}"
+            python -m market_data extract-cumulative \
+              --archive "${PREVIOUS_ARCHIVE}" \
+              --output "${PREVIOUS_DIR}"
             python - "${PREVIOUS_DIR}" "${PREVIOUS_AS_OF}" <<'PY'
           import sys
           from pathlib import Path

@@ -94,6 +94,13 @@ def build_parser() -> argparse.ArgumentParser:
     materialize.add_argument("--root", required=True, type=Path)
     materialize.add_argument("--output", required=True, type=Path)
 
+    extract_cumulative = subcommands.add_parser(
+        "extract-cumulative",
+        help="safely extract a cumulative archive before verification",
+    )
+    extract_cumulative.add_argument("--archive", required=True, type=Path)
+    extract_cumulative.add_argument("--output", required=True, type=Path)
+
     registry_verify = subcommands.add_parser(
         "verify-registry-cache",
         help="verify every content-addressed dataset referenced by a local registry",
@@ -266,6 +273,12 @@ def _run(args: argparse.Namespace) -> int:
             ensure_ascii=False,
             sort_keys=True,
         ))
+        return 0
+    if args.command == "extract-cumulative":
+        from .cumulative import extract_cumulative_archive
+
+        extract_cumulative_archive(args.archive, args.output)
+        print(args.output)
         return 0
     if args.command == "verify-registry-cache":
         from .cumulative import verify_registry_cache

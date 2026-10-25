@@ -7,8 +7,9 @@ import csv
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
+import tarfile
 import tempfile
 from typing import Any
 
@@ -20,6 +21,82 @@ from .valuation import verify_valuation
 
 MANIFEST_NAME = "cumulative-manifest.json"
 IGNORED_NAMES = {"request-cache"}
+MAX_ARCHIVE_MEMBERS = 10_000
+MAX_EXTRACTED_BYTES = 2 * 1024 * 1024 * 1024
+
+
+def _archive_member_name(member: tarfile.TarInfo) -> str | None:
+    """Return a normalized safe path, or None for macOS metadata sidecars."""
+    name = member.name
+    while name.startswith("./"):
+        name = name[2:]
+    path = PurePosixPath(name)
+    if path.name.startswith("._") or "__MACOSX" in path.parts:
+        return None
+    if name in {"", "."}:
+        if member.isdir():
+            return None
+        raise ValueError(f"unsafe cumulative archive path: {member.name}")
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or name.startswith("/")
+    ):
+        raise ValueError(f"unsafe cumulative archive path: {member.name}")
+    return path.as_posix()
+
+
+def extract_cumulative_archive(archive_path: Path, output_dir: Path) -> None:
+    """Safely extract a cumulative archive, ignoring inert macOS metadata files."""
+    archive_path = Path(archive_path)
+    output_dir = Path(output_dir)
+    if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
+        raise FileExistsError("cumulative extraction output must be absent or empty")
+    with tarfile.open(archive_path, mode="r:gz") as archive:
+        safe_members: list[tuple[tarfile.TarInfo, str]] = []
+        seen: set[str] = set()
+        extracted_bytes = 0
+        for count, member in enumerate(archive, start=1):
+            if count > MAX_ARCHIVE_MEMBERS:
+                raise ValueError("cumulative archive contains too many members")
+            name = _archive_member_name(member)
+            if name is None:
+                continue
+            if (
+                member.issym()
+                or member.islnk()
+                or member.ischr()
+                or member.isblk()
+                or member.isfifo()
+                or member.isdev()
+                or not (member.isfile() or member.isdir())
+            ):
+                raise ValueError(f"cumulative archive contains a link or special file: {name}")
+            if name in seen:
+                raise ValueError(f"cumulative archive contains a duplicate path: {name}")
+            seen.add(name)
+            if member.isfile():
+                extracted_bytes += member.size
+                if extracted_bytes > MAX_EXTRACTED_BYTES:
+                    raise ValueError("extracted cumulative archive exceeds the size limit")
+            safe_members.append((member, name))
+        if not safe_members:
+            raise ValueError("cumulative archive is empty")
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        for member, name in safe_members:
+            destination = output_dir / name
+            if member.isdir():
+                destination.mkdir(parents=True, exist_ok=True)
+                continue
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise ValueError(f"cannot read cumulative archive member: {name}")
+            with source, destination.open("wb") as handle:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    handle.write(chunk)
+            destination.chmod(0o644)
 
 
 def _sha256(path: Path) -> str:
