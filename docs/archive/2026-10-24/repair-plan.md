@@ -1,5 +1,7 @@
 # Data-source and release repair plan
 
+> 历史记录：保留 2026-10-24 阶段的设计、约束与验收结果，不作为当前运行说明。后续来源许可、指数数量和发布方式已有变化；当前入口见[文档导航](../../README.md)。
+
 Date: 2026-10-24
 
 Goal: collect an auditable index price snapshot without requiring the index publisher's website, and reject unsafe release candidates.

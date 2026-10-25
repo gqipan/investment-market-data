@@ -1,5 +1,7 @@
 # Fixed release consumer implementation plan
 
+> 历史记录：保留 2026-10-24 阶段的设计、约束与验收结果，不作为当前运行说明。后续来源许可、指数数量和发布方式已有变化；当前入口见[文档导航](../../README.md)。
+
 **Goal:** Download pinned public releases and produce a read-only shadow comparison without enabling production switching.
 
 **Architecture:** A bounded anonymous GitHub downloader delegates content verification and immutable cache installation to stage_release. A separate shadow checker verifies pinned consumer manifests and compares compatible raw daily series.
