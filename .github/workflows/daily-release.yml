@@ -2,11 +2,12 @@ name: daily index release
 
 on:
   schedule:
-    # Three daily checks catch delayed upstream sessions without creating empty releases.
-    # GitHub cron uses UTC. The 09:00 run only considers sessions through yesterday.
+    # Staggered checks mitigate delayed/dropped schedule events and upstream lag.
+    # GitHub cron uses UTC; morning checks only consider sessions through yesterday.
     - cron: "40 13 * * *" # 21:40 Asia/Shanghai
+    - cron: "17 14 * * *" # 22:17 Asia/Shanghai, extra recovery check
     - cron: "40 15 * * *" # 23:40 Asia/Shanghai
-    - cron: "0 1 * * *"   # 09:00 Asia/Shanghai
+    - cron: "17 1 * * *"  # 09:17 Asia/Shanghai, avoid the busy hour boundary
   workflow_dispatch:
     inputs:
       as_of:
@@ -21,6 +22,11 @@ on:
 
 permissions:
   contents: write
+
+# Delayed scheduled runs and manual recovery must not race to publish one tag.
+concurrency:
+  group: daily-index-release
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -39,6 +45,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AS_OF_INPUT: ${{ inputs.as_of }}
           BOOTSTRAP_INPUT: ${{ inputs.bootstrap }}
+          SCHEDULE_INPUT: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
           NOW_DATE="$(TZ=Asia/Shanghai date +%F)"
@@ -54,6 +61,9 @@ jobs:
             echo "upper bound ${UPPER_BOUND} is later than today ${NOW_DATE}" >&2
             exit 1
           fi
+
+          echo "event=${GITHUB_EVENT_NAME} schedule=${SCHEDULE_INPUT:-manual} started_at=$(date -u +%FT%TZ) upper_bound=${UPPER_BOUND}"
+          echo "event=${GITHUB_EVENT_NAME}; schedule=${SCHEDULE_INPUT:-manual}; upper_bound=${UPPER_BOUND}" >> "${GITHUB_STEP_SUMMARY}"
 
           BOOTSTRAP="${BOOTSTRAP_INPUT:-false}"
           PREVIOUS_DIR=""
@@ -88,6 +98,7 @@ jobs:
             WINDOW_STATUS="$(jq -r '.status' <<<"${WINDOW}")"
             if [ "${WINDOW_STATUS}" = "noop" ]; then
               echo "no un-released A-share session exists after ${PREVIOUS_AS_OF} through ${UPPER_BOUND}"
+              echo "No new closed trading session: latest=${PREVIOUS_AS_OF}; upper_bound=${UPPER_BOUND}" >> "${GITHUB_STEP_SUMMARY}"
               exit 0
             fi
             START="$(jq -r '.start' <<<"${WINDOW}")"
@@ -215,3 +226,4 @@ jobs:
             "${RUN}/coverage-report.json" \
             "${RUN}/coverage-report.md"
           gh release edit "${TAG}" --draft=false
+          echo "Published ${TAG}; collected ${START} through ${TARGET_AS_OF}" >> "${GITHUB_STEP_SUMMARY}"
