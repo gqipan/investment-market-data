@@ -38,7 +38,7 @@ def _load(directory: Path, pin: str):
             raise ValueError('unsafe consumer data file')
     _check_export(directory, m['upstream_release_manifest_sha256'], m['upstream_dataset_id'], m['dataset_id'])
     if (m.get('market') != 'A' or m.get('currency') != 'CNY'
-            or not re.fullmatch(r'[0-9]{6}', m['symbol'])
+            or not re.fullmatch(r'(?:[0-9]{6}|H[0-9]{5})', m['symbol'])
             or m.get('series_type') not in {'price_index', 'total_return_index'}
             or m.get('frequency') != '1d'
             or m.get('timezone') != 'Asia/Shanghai' or m.get('adjust') not in ('', 'raw', 'none')):

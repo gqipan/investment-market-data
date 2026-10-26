@@ -165,7 +165,8 @@ def write_valuation(output: Path, rows: list[dict], *, symbol: str, source: str,
     validate_observations(rows)
     if first > last or any(not requested_start <= row['Date'] <= requested_end for row in rows):
         raise ValueError('valuation outside requested range')
-    if not re.fullmatch(r'\d{6}', symbol) or source not in {'akshare_legulegu', 'danjuan_snapshot', 'csindex_optional_history'}:
+    if (not re.fullmatch(r'(?:[0-9]{6}|H[0-9]{5})', symbol)
+            or source not in {'akshare_legulegu', 'danjuan_snapshot', 'csindex_optional_history'}):
         raise ValueError('unregistered valuation source or symbol')
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.valuation-', dir=output.parent) as temporary:

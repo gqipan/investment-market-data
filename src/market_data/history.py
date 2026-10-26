@@ -144,6 +144,9 @@ def collect_history_price(*, root: Path, dataset_name: str, start: str, end: str
     if not isinstance(request, HistoricalCalendarRequest):
         request = HistoricalCalendarRequest(request)
     if provider == 'csindex_official':
+        collection_start = max(start, instrument.get('history_start') or start)
+        if collection_start > end:
+            raise ValueError('requested range precedes registered official history')
         output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix='.history-', dir=output.parent) as temporary:
             staged = Path(temporary) / 'snapshot'
@@ -151,7 +154,7 @@ def collect_history_price(*, root: Path, dataset_name: str, start: str, end: str
                 root=root,
                 dataset_name=dataset_name,
                 provider=provider,
-                start=start,
+                start=collection_start,
                 end=end,
                 output=staged,
                 request=request,
@@ -182,8 +185,8 @@ def collect_history_price(*, root: Path, dataset_name: str, start: str, end: str
             'coverage_verified': True,
             'requested_start': start,
             'requested_end': end,
-            'requested_range_complete': True,
-            'prefix_unavailable_before': None,
+            'requested_range_complete': collection_start == start,
+            'prefix_unavailable_before': collection_start if collection_start != start else None,
             'calendar_errata': meta['calendar_errata'],
             'ohlc_anomalies': [],
             'ohlcv_validation_passed': True,

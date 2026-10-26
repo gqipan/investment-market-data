@@ -247,5 +247,27 @@
       "csindex_official": "000993",
       "csindex_optional_history": "000993"
     }
+  },
+  "dividend_low_vol": {
+    "canonical_id": "index.cn.csi.H30269.price",
+    "display_name": "红利低波",
+    "symbol": "H30269",
+    "market": "CN",
+    "currency": "CNY",
+    "asset_type": "index",
+    "series_type": "price_index",
+    "timezone": "Asia/Shanghai",
+    "frequency": "1d",
+    "adjust": "raw",
+    "notes": "Independent CSI Dividend Low Volatility Index (50 constituents); never map to 930955. API history is verified from 2006-01-04; official base-date observation 2005-12-30 is unavailable. Pre-publication values are backtested history.",
+    "provider_symbols": {
+      "csindex_official": "H30269",
+      "danjuan_snapshot": "CSIH30269",
+      "csindex_optional_history": "H30269"
+    },
+    "base_date": "2005-12-30",
+    "history_start": "2006-01-04",
+    "history_start_basis": "first_available_official_observation",
+    "published_from": "2013-12-19"
   }
 }

@@ -49,6 +49,25 @@ class CollectionTests(unittest.TestCase):
                     provider='tencent_raw',
                     request=lambda *_: self.fail('unsupported mapping reached network'))
 
+    def test_h30269_uses_its_own_official_identity(self):
+        def request(url, params):
+            if url == collection.CALENDAR_URL:
+                return calendar_rows('2026-10-26')
+            self.assertEqual(params['indexCode'], 'H30269')
+            return {'code': '200', 'data': [{
+                'tradeDate': '20261026', 'indexCode': 'H30269',
+                'open': 100, 'high': 103, 'low': 99, 'close': 102, 'tradingVol': 1000,
+            }]}
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'snapshot'
+            collection.collect_index(root=ROOT, dataset_name='dividend-low-vol-price-v1',
+                start='2026-10-26', end='2026-10-26', output=target, request=request)
+            meta = json.loads((target / 'manifest.json').read_text())
+            self.assertEqual(meta['symbol'], 'H30269')
+            self.assertEqual(meta['source'], 'csindex_official')
+            self.assertEqual(meta['source_symbol'], 'H30269')
+            self.assertIn('.H30269.', meta['dataset_key'])
+
     def test_calendar_cloud_permissions_are_independent(self):
         import shutil
         with tempfile.TemporaryDirectory() as temp:
