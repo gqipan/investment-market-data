@@ -30,6 +30,17 @@ class ValuationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'hash'):
                 verify_valuation(path)
 
+    def test_h30269_valuation_roundtrip_preserves_identity(self):
+        from market_data.valuation import write_valuation, verify_valuation
+        row = {'Date': '2026-10-26', 'Metric': 'pe_reported', 'Value': 9,
+               'Unit': 'multiple', 'Method': 'provider_reported'}
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / 'value'
+            write_valuation(target, [row], symbol='H30269', source='danjuan_snapshot', raw={},
+                            requested_start='2026-10-26', requested_end='2026-10-26')
+            self.assertEqual(verify_valuation(target)['symbol'], 'H30269')
+            self.assertEqual(verify_valuation(target)['metrics']['pe_reported']['frequency'], 'snapshot')
+
     def test_reject_duplicate_nonfinite_wrong_units_and_method(self):
         from market_data.valuation import validate_observations
         row = {'Date': '2025-01-02', 'Metric': 'dividend_yield', 'Value': .03,

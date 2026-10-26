@@ -65,6 +65,26 @@ class HistoryTests(unittest.TestCase):
                     {'code': 0, 'data': {'sh000300': {'day': [['2025-01-02', '1', '1', '1', '1', '0']]}}})
             self.assertFalse((Path(temp) / 'broken').exists())
 
+    def test_official_history_respects_registered_start_without_inventing_prefix(self):
+        from market_data.history import collect_history_price
+        from market_data.collection import CALENDAR_URL
+        def request(url, params):
+            if url == CALENDAR_URL:
+                self.assertEqual(params['month'], '2006-01')
+                return {'data': [{'jyrq': f'2006-01-{day:02d}',
+                    'jybz': '1' if day in {4, 5} else '0'} for day in range(1, 32)]}
+            self.assertEqual(params['startDate'], '20060104')
+            return {'code': '200', 'data': [{'tradeDate': f'2006010{day}', 'indexCode': 'H30269',
+                    'open': 100, 'high': 102, 'low': 99, 'close': 101, 'tradingVol': 1000}
+                    for day in (4, 5)]}
+        with tempfile.TemporaryDirectory() as temp:
+            result = collect_history_price(root=ROOT, dataset_name='dividend-low-vol-price-v1',
+                start='2005-01-01', end='2006-01-05', output=Path(temp)/'price', request=request)
+            self.assertEqual(result['first_date'], '2006-01-04')
+            self.assertEqual(result['requested_start'], '2005-01-01')
+            self.assertFalse(result['requested_range_complete'])
+            self.assertEqual(result['prefix_unavailable_before'], '2006-01-04')
+
     def test_cloud_gate_rejects_unapproved_source_before_network(self):
         from market_data.history import _local_gate
         with tempfile.TemporaryDirectory() as temp, patch.dict(os.environ, {'GITHUB_ACTIONS': 'true'}):
@@ -88,7 +108,7 @@ class HistoryTests(unittest.TestCase):
             report = backfill(root=ROOT, start='2025-01-01', end='2025-01-03', output=Path(temp) / 'run',
                               request=unavailable, legu_fetch=unavailable, price_fetch=unavailable)
             self.assertEqual(report['status'], 'partial')
-            self.assertEqual(len(report['indices']), 12)
+            self.assertEqual(len(report['indices']), 13)
             self.assertTrue(all(row['price']['status'] == 'unavailable' for row in report['indices']))
             self.assertTrue((Path(temp) / 'run' / 'coverage-report.md').is_file())
 
@@ -242,7 +262,7 @@ class BackfillBoundaryTests(unittest.TestCase):
                 request=lambda *_:{'data':[None]},price_fetch=unavailable,legu_fetch=lambda *_:{'pe':[],'pb':[]})
             self.assertEqual(report['status'],'partial')
             self.assertEqual(report['calendar']['status'],'unavailable')
-            self.assertEqual(len(report['indices']),12)
+            self.assertEqual(len(report['indices']),13)
             self.assertTrue((Path(temp)/'run/coverage-report.json').exists())
 
     def test_metadata_write_failure_does_not_install_snapshot(self):

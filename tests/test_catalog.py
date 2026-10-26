@@ -21,8 +21,8 @@ class CatalogTests(unittest.TestCase):
 
     def test_current_catalog_tracks_selected_indices(self) -> None:
         counts = validate_catalog(ROOT)
-        self.assertEqual(counts["tracked"], 12)
-        self.assertEqual(counts["datasets"], 25)
+        self.assertEqual(counts["tracked"], 13)
+        self.assertEqual(counts["datasets"], 27)
 
     def test_report_contains_no_market_data_and_all_selected_symbols(self) -> None:
         report = build_catalog_report(ROOT)
@@ -43,6 +43,7 @@ class CatalogTests(unittest.TestCase):
                 "000932",
                 "000991",
                 "000993",
+                "H30269",
             ],
         )
 
