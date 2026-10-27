@@ -39,6 +39,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+      - name: Check actual Git objects before collection
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path . --repository --staged
       - name: Collect public index history and publish an immutable release
         env:
           PYTHONPATH: src
@@ -163,7 +167,6 @@ jobs:
             ADDED="$(jq -r '.added' "${RUN}/coverage-report.json")"
             if [ "${ADDED}" = "0" ]; then
               echo "No new independent source snapshot; retaining ${PREVIOUS_TAG}" >> "${GITHUB_STEP_SUMMARY}"
-              cat "${RUN}/coverage-report.md" >> "${GITHUB_STEP_SUMMARY}"
               exit 0
             fi
             CUMULATIVE="data/cumulative-${TARGET_AS_OF}"
@@ -247,26 +250,21 @@ jobs:
             --root "${CUMULATIVE}" \
             --output "data/materialized-${TARGET_AS_OF}"
 
-          mkdir -p dist
-          DELTA_ARCHIVE="dist/index-data-delta-${TARGET_AS_OF}.tar.gz"
-          CUMULATIVE_ARCHIVE="dist/index-data-cumulative-${TARGET_AS_OF}.tar.gz"
-          tar -czf "${DELTA_ARCHIVE}" \
-            --exclude="./request-cache" \
-            -C "${RUN}" .
-          tar -czf "${CUMULATIVE_ARCHIVE}" -C "${CUMULATIVE}" .
-          (
-            cd dist
-            sha256sum ./*.tar.gz > SHA256SUMS
-          )
+          UPLOAD="dist/verified-upload"
+          python -m market_data prepare-publication \
+            --delta-dir "${RUN}" \
+            --cumulative-dir "${CUMULATIVE}" \
+            --as-of "${TARGET_AS_OF}" \
+            --output-dir "${UPLOAD}"
           gh release create "${TAG}" \
             --target "${GITHUB_SHA}" \
             --title "Index data ${TARGET_AS_OF}" \
             --draft \
             --notes "Owner-approved public index price, calendar, and valuation cumulative snapshot. Every release contains the baseline plus all appended closed-session batches; delayed sessions are caught up before publication. The previous archive hash is recorded in cumulative-manifest.json. Private ledgers are excluded. The coverage report records source gaps; this is not a claim that every valuation field is complete. Corrections require a new revision." \
-            "${CUMULATIVE_ARCHIVE}" \
-            "${DELTA_ARCHIVE}" \
-            dist/SHA256SUMS \
-            "${RUN}/coverage-report.json" \
-            "${RUN}/coverage-report.md"
+            "${UPLOAD}/index-data-cumulative-${TARGET_AS_OF}.tar.gz" \
+            "${UPLOAD}/index-data-delta-${TARGET_AS_OF}.tar.gz" \
+            "${UPLOAD}/SHA256SUMS" \
+            "${UPLOAD}/coverage-report.json" \
+            "${UPLOAD}/coverage-report.md"
           gh release edit "${TAG}" --draft=false
           echo "Published ${TAG}; collected ${START} through ${TARGET_AS_OF}" >> "${GITHUB_STEP_SUMMARY}"
