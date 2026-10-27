@@ -40,3 +40,48 @@ cumulative-manifest.json
 - `coverage-report.json` / `.md`：当天来源覆盖、缺口和不支持映射。
 
 下载方应锁定 tag 与 `SHA256SUMS`，不使用漂移的 Latest。Git clone 不包含 Release 附件；需要长期保存时另行归档累计包。
+
+## 0.1.4 同源路线连续性
+
+`catalog/watchlist.json.additional_price_datasets` 显式列出六条独立 Sina 日线：
+000300、000905、000852、399006、000510、000688。`backfill` 每次对这些登记项
+调用 `collect_index(provider="sina_raw")`，保存到 `<symbol>/additional_prices/<dataset-name>/`，
+并在每个指数的 `additional_prices` 以及 Markdown 报告中记录成功或固定失败原因码。
+不隐式换源，也不修改消费端的启用来源。额外来源失败时允许健康来源发布；失败路线
+仍保留上一版，消费端不得自动把未到达目标日期的该路线推进为当前数据。
+既有主价格 established-symbol 门禁继续有效。工作流额外记录 `route-coverage.json`，
+使用 `(symbol, source, data_class)` 区分路线；Close 从价格投影的候选须再通过材料化验证。
+
+材料化只为已经存在的 `normalized_close` 路线寻找完全相同 symbol/source 的已验证
+`normalized_price`，将实际 Close 投影续接。旧 Close 的类型、来源、原始历史行和 OHLC
+异常记录保留；价格路线继续独立存在，不把 Close 扩成 OHLCV。`close_projections`
+记录输入 dataset_id、价格/日历哈希和区间，`raw-bars.json` 另存实际 Date/Close 投影证据。
+重叠 Close 冲突、原有缺口以及桥接区间缺失交易日都失败，输出目录原子安装前即停止。
+
+新价格 manifest 的 `calendar_context` 保存同次独立深交所日历中“请求起始月月初至
+请求结束”的已验证交易日区间。它用于离线核对节假日桥接：不把工作日猜成交易日或休市日。
+旧价格快照无该证据时，仅允许已覆盖区间或纯周末间隔；跨未验证工作日须重新收集涵盖桥接
+区间的价格/日历证据。H30269 的首次启用仍由消费端明确决定，930955 保持原身份和来源。
+
+额外来源恢复通过 `backfill --previous-registry <上一版材料化目录>/registry.json` 闭环：
+先复验该 registry 的全部内容，再按同 symbol/source 的旧价格尾日次日回补。
+工作流自动传递此参数；因此某来源前日失败不会因全局 Release 已推进而永久漏掉那一天。
+未存在的额外路线仍只按本次请求起点采集，不自动补历史或启用消费端路线。
+
+## 同一交易日独立来源补齐修订
+
+全局交易日窗口无新增时，工作流仍下载并复验上一累计包及材料化 registry，调用
+`repair-additional-prices --previous-registry ... --as-of <当前日期> --output ...`。
+仅检查 `additional_price_datasets` 登记的 Sina 路线；已到目标日的路线不请求，滞后路线
+从自身尾日次日补齐。失败保留原因，成功新增数 `added=0` 时不发布空版本。
+
+有成功新路线后显式调用 `revise-cumulative --previous-dir ... --repair-dir ...
+--as-of ... --previous-release data-<日期>-rN --previous-archive-sha256 ... --output-dir ...`，
+在最新 as_of 批次的 `repairs/<内容哈希>/` 中追加此前该批次不存在的路线。
+该函数拒绝同批次已有同 symbol/source/class、非 Sina、非当前日期、非价格以及空修订；
+保留旧累计包全部数据文件原字节，根累计清单记录前版 tag/包哈希和修订清单。
+完整累计复验、隐私扫描、材料化和 registry 验证通过后，工作流才发布新的不可变 `r(N+1)`。
+已有 tag、快照和旧包正文都不会被覆盖。重复检查全部路线已齐时再次 no-op。
+
+合并 `calendar_context` 时，区间必须连续且重叠区间的开闭市结论一致；
+不能把一月与三月日历直接并集后声称二月已验证。缺口需要采集覆盖该区间的证据。

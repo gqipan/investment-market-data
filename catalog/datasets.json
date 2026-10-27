@@ -294,5 +294,71 @@
     "adapter": "valuation-observation-v1",
     "bars_file": null,
     "calendar_file": null
+  },
+  "csi300-sina-price-v1": {
+    "instrument": "csi300",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.csi.000300.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 300 normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
+  },
+  "csi500-sina-price-v1": {
+    "instrument": "csi500",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.csi.000905.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 500 normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
+  },
+  "csi1000-sina-price-v1": {
+    "instrument": "csi1000",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.csi.000852.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "CSI 1000 normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
+  },
+  "chinext-sina-price-v1": {
+    "instrument": "chinext",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.szse.399006.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "ChiNext normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
+  },
+  "csi-a500-sina-price-v1": {
+    "instrument": "csi_a500",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.csi.000510.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "CSI A500 normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
+  },
+  "star50-sina-price-v1": {
+    "instrument": "star50",
+    "source": "sina_raw",
+    "dataset_key": "index.cn.csi.000688.price.sina_raw",
+    "data_class": "normalized_price",
+    "label": "STAR 50 normalized daily price index (Sina independent source)",
+    "bars_file": null,
+    "calendar_file": null,
+    "volume_unit": "sina_lots",
+    "adapter": "sina_raw-v1"
   }
 }

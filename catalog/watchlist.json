@@ -21,5 +21,13 @@
     "000991",
     "000993",
     "H30269"
+  ],
+  "additional_price_datasets": [
+    "csi300-sina-price-v1",
+    "csi500-sina-price-v1",
+    "csi1000-sina-price-v1",
+    "chinext-sina-price-v1",
+    "csi-a500-sina-price-v1",
+    "star50-sina-price-v1"
   ]
 }

@@ -86,13 +86,16 @@ def validate_current_coverage(
     report: dict[str, Any],
     *,
     expected_symbols: set[str] | None = None,
+    expected_routes: set[tuple[str, str, str]] | None = None,
 ) -> dict[str, Any]:
     """Fail unless every established index reached the requested target session.
 
     A symbol that was present in the previous cumulative release stays part of
     the contract. Temporary source failures therefore stop publication and are
     retried by the next scheduled run instead of silently advancing the release.
-    New unsupported mappings are not imposed retroactively.
+    New unsupported mappings are not imposed retroactively. Additional source
+    failures remain per-route retain_previous findings; they do not stop healthy
+    siblings. Close projection is only confirmed by cumulative materialization.
     """
     requested_end = report.get("requested_end")
     rows = report.get("indices")
@@ -136,8 +139,29 @@ def validate_current_coverage(
         )
     if not current_symbols:
         raise ValueError("no price history reached requested coverage end")
+    routes = []
+    for symbol, source, data_class in sorted(expected_routes or set()):
+        if data_class not in {'normalized_close', 'normalized_price'}:
+            raise ValueError('expected route must be a price or close route')
+        row = by_symbol.get(symbol, {})
+        candidates = [row.get('price', {}), *row.get('additional_prices', [])]
+        candidate = next((price for price in candidates if price.get('source') == source), {})
+        current = (candidate.get('status') in PRICE_STATUSES
+                   and candidate.get('last_date') == requested_end
+                   and candidate.get('coverage_verified') is True)
+        candidate_class = ('normalized_close' if candidate.get('status') in {'close_only', 'gapped_close'}
+                           else 'normalized_price')
+        status = 'retain_previous'
+        if current and data_class == candidate_class:
+            status = 'current_candidate'
+        elif current and data_class == 'normalized_close' and candidate_class == 'normalized_price':
+            status = 'requires_close_projection'
+        routes.append({'symbol': symbol, 'source': source, 'data_class': data_class,
+                       'status': status, 'reason_code': candidate.get('reason_code')
+                       or ('route_not_current' if status == 'retain_previous' else None)})
     return {
         "status": "pass",
+        "routes": routes,
         "requested_end": requested_end,
         "expected_symbols": sorted(expected),
         "current_symbols": sorted(current_symbols),

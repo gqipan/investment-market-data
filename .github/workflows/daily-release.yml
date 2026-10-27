@@ -66,6 +66,7 @@ jobs:
           echo "event=${GITHUB_EVENT_NAME}; schedule=${SCHEDULE_INPUT:-manual}; upper_bound=${UPPER_BOUND}" >> "${GITHUB_STEP_SUMMARY}"
 
           BOOTSTRAP="${BOOTSTRAP_INPUT:-false}"
+          REPAIR_ONLY=false
           PREVIOUS_DIR=""
           PREVIOUS_TAG=""
           PREVIOUS_SHA256=""
@@ -97,17 +98,23 @@ jobs:
               --upper-bound "${UPPER_BOUND}")"
             WINDOW_STATUS="$(jq -r '.status' <<<"${WINDOW}")"
             if [ "${WINDOW_STATUS}" = "noop" ]; then
-              echo "no un-released A-share session exists after ${PREVIOUS_AS_OF} through ${UPPER_BOUND}"
-              echo "No new closed trading session: latest=${PREVIOUS_AS_OF}; upper_bound=${UPPER_BOUND}" >> "${GITHUB_STEP_SUMMARY}"
-              exit 0
+              REPAIR_ONLY=true
+              START="${PREVIOUS_AS_OF}"
+              TARGET_AS_OF="${PREVIOUS_AS_OF}"
+              echo "no new global session; checking lagging independent sources through ${PREVIOUS_AS_OF}"
+            else
+              START="$(jq -r '.start' <<<"${WINDOW}")"
+              TARGET_AS_OF="$(jq -r '.target' <<<"${WINDOW}")"
             fi
-            START="$(jq -r '.start' <<<"${WINDOW}")"
-            TARGET_AS_OF="$(jq -r '.target' <<<"${WINDOW}")"
             echo "latest release ${PREVIOUS_TAG} ends at ${PREVIOUS_AS_OF}; collecting ${START} through ${TARGET_AS_OF}"
           fi
 
           RUN="data/daily-${TARGET_AS_OF}"
           TAG="data-${TARGET_AS_OF}-r1"
+          if [ "${REPAIR_ONLY}" = "true" ]; then
+            PREVIOUS_REVISION="${PREVIOUS_TAG##*-r}"
+            TAG="data-${TARGET_AS_OF}-r$((PREVIOUS_REVISION + 1))"
+          fi
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "release ${TAG} already exists but is not the latest cumulative release; refusing to replace it" >&2
             exit 1
@@ -148,14 +155,39 @@ jobs:
             echo "appending ${START} through ${TARGET_AS_OF} to ${PREVIOUS_TAG}"
           fi
 
-          python -m market_data backfill \
-            --start "${START}" \
-            --end "${TARGET_AS_OF}" \
-            --output "${RUN}" \
-            --include-csindex \
-            --allow-partial
-          python -m market_data verify-delta-tree --root "${RUN}"
-          python - "${RUN}" "${PREVIOUS_DIR:+data/previous-materialized/registry.json}" <<'PY'
+          if [ "${REPAIR_ONLY}" = "true" ]; then
+            python -m market_data repair-additional-prices \
+              --previous-registry data/previous-materialized/registry.json \
+              --as-of "${TARGET_AS_OF}" \
+              --output "${RUN}"
+            ADDED="$(jq -r '.added' "${RUN}/coverage-report.json")"
+            if [ "${ADDED}" = "0" ]; then
+              echo "No new independent source snapshot; retaining ${PREVIOUS_TAG}" >> "${GITHUB_STEP_SUMMARY}"
+              cat "${RUN}/coverage-report.md" >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            CUMULATIVE="data/cumulative-${TARGET_AS_OF}"
+            python -m market_data revise-cumulative \
+              --previous-dir "${PREVIOUS_DIR}" \
+              --repair-dir "${RUN}" \
+              --output-dir "${CUMULATIVE}" \
+              --as-of "${TARGET_AS_OF}" \
+              --previous-release "${PREVIOUS_TAG}" \
+              --previous-archive-sha256 "${PREVIOUS_SHA256}"
+          else
+            HISTORY_ARGS=()
+            if [ "${BOOTSTRAP}" != "true" ]; then
+              HISTORY_ARGS+=(--previous-registry data/previous-materialized/registry.json)
+            fi
+            python -m market_data backfill \
+              --start "${START}" \
+              --end "${TARGET_AS_OF}" \
+              --output "${RUN}" \
+              --include-csindex \
+              "${HISTORY_ARGS[@]}" \
+              --allow-partial
+            python -m market_data verify-delta-tree --root "${RUN}"
+            python - "${RUN}" "${PREVIOUS_DIR:+data/previous-materialized/registry.json}" <<'PY'
           import json
           import sys
           from pathlib import Path
@@ -165,6 +197,7 @@ jobs:
           run = Path(sys.argv[1])
           report = json.loads((run / "coverage-report.json").read_text())
           expected_symbols = set()
+          expected_routes = set()
           registry_arg = sys.argv[2]
           if registry_arg:
               registry = json.loads(Path(registry_arg).read_text())
@@ -173,10 +206,19 @@ jobs:
                   for entry in registry.get("datasets", [])
                   if entry.get("data_class") in {"normalized_price", "normalized_close"}
               }
+              expected_routes = {
+                  (entry["symbol"], entry["source"], entry["data_class"])
+                  for entry in registry.get("datasets", [])
+                  if entry.get("data_class") in {"normalized_price", "normalized_close"}
+              }
           checked = validate_current_coverage(
               report,
               expected_symbols=expected_symbols,
+              expected_routes=expected_routes,
           )
+          (run / "route-coverage.json").write_text(json.dumps(checked["routes"], indent=2) + "\n")
+          for route in checked["routes"]:
+              print("route coverage:", route)
           print(
               f"coverage status={report['status']}; "
               f"price histories={len(checked['current_symbols'])}/"
@@ -185,20 +227,21 @@ jobs:
           )
           PY
 
-          CUMULATIVE="data/cumulative-${TARGET_AS_OF}"
-          if [ "${BOOTSTRAP}" = "true" ]; then
-            python -m market_data build-cumulative \
-              --delta-dir "${RUN}" \
-              --output-dir "${CUMULATIVE}" \
-              --as-of "${TARGET_AS_OF}"
-          else
-            python -m market_data build-cumulative \
-              --delta-dir "${RUN}" \
-              --output-dir "${CUMULATIVE}" \
-              --as-of "${TARGET_AS_OF}" \
-              --previous-dir "${PREVIOUS_DIR}" \
-              --previous-release "${PREVIOUS_TAG}" \
-              --previous-archive-sha256 "${PREVIOUS_SHA256}"
+            CUMULATIVE="data/cumulative-${TARGET_AS_OF}"
+            if [ "${BOOTSTRAP}" = "true" ]; then
+              python -m market_data build-cumulative \
+                --delta-dir "${RUN}" \
+                --output-dir "${CUMULATIVE}" \
+                --as-of "${TARGET_AS_OF}"
+            else
+              python -m market_data build-cumulative \
+                --delta-dir "${RUN}" \
+                --output-dir "${CUMULATIVE}" \
+                --as-of "${TARGET_AS_OF}" \
+                --previous-dir "${PREVIOUS_DIR}" \
+                --previous-release "${PREVIOUS_TAG}" \
+                --previous-archive-sha256 "${PREVIOUS_SHA256}"
+            fi
           fi
           python -m market_data materialize-cumulative \
             --root "${CUMULATIVE}" \
