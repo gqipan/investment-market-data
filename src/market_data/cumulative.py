@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import csv
 import hashlib
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import shutil
 import tarfile
@@ -258,11 +259,37 @@ def _batch_snapshots(root: Path, batches: list[dict[str, Any]]) -> dict[tuple, l
     return grouped
 
 
+def _merge_calendar_contexts(snapshots: list[tuple[str, Path, dict]]) -> dict | None:
+    """Never turn disjoint calendar evidence into a claimed continuous range."""
+    contexts = [item[2].get('calendar_context') for item in snapshots]
+    if not all(contexts):
+        return None
+    contexts.sort(key=lambda context: context['requested_start'])
+    first = contexts[0]['requested_start']
+    covered_end = date.fromisoformat(contexts[0]['requested_end'])
+    sessions = set(contexts[0]['expected_sessions'])
+    for context in contexts[1:]:
+        start = date.fromisoformat(context['requested_start'])
+        end = date.fromisoformat(context['requested_end'])
+        if start > covered_end + timedelta(days=1):
+            raise ValueError('calendar context gap between verified intervals')
+        overlap_end = min(covered_end, end).isoformat()
+        old_overlap = {day for day in sessions if start.isoformat() <= day <= overlap_end}
+        new_overlap = {day for day in context['expected_sessions'] if start.isoformat() <= day <= overlap_end}
+        if old_overlap != new_overlap:
+            raise ValueError('calendar context conflict in overlapping interval')
+        sessions.update(context['expected_sessions'])
+        covered_end = max(covered_end, end)
+    return {'source_id': 'szse_calendar', 'requested_start': first,
+            'requested_end': covered_end.isoformat(), 'expected_sessions': sorted(sessions)}
+
+
 def _merge_price_snapshots(
     snapshots: list[tuple[str, Path, dict]],
     target: Path,
 ) -> dict[str, Any]:
     """Merge adjacent same-source batches into one verified price snapshot."""
+    calendar_context = _merge_calendar_contexts(snapshots)
     bars_by_day: dict[date, Bar] = {}
     sessions_by_day: dict[date, bool] = {}
     for _, snapshot, meta in snapshots:
@@ -296,6 +323,10 @@ def _merge_price_snapshots(
         sha256=_sha256(target / "bars.csv"),
         calendar_sha256=_sha256(target / "calendar.csv"),
     )
+    if calendar_context is not None:
+        meta['calendar_context'] = calendar_context
+    else:
+        meta.pop('calendar_context', None)
     meta["dataset_id"] = dataset_identity(meta)
     (target / "manifest.json").write_bytes(_json_bytes(meta))
     _verify_price_snapshot(target)
@@ -378,6 +409,79 @@ def _merge_close_snapshots(
     return meta
 
 
+def _extend_close_from_prices(target: Path, prices: list[tuple[str, Path, dict]]) -> None:
+    """Append genuine same-route Close observations, retaining close-only identity.
+
+    A request interval must bridge any working days after the prior request.
+    Holidays must therefore be included in a verified requested range; no
+    weekday is silently inferred closed. Weekends need no fabricated sessions.
+    """
+    from .history import verify_close_history
+
+    meta = verify_close_history(target)
+    if not meta['coverage_verified']:
+        raise ValueError('close projection cannot hide an existing coverage gap')
+    with (target / 'close.csv').open(encoding='utf-8', newline='') as handle:
+        closes = {row['Date']: float(row['Close']) for row in csv.DictReader(handle)}
+    raw = json.loads((target / 'raw-bars.json').read_text(encoding='utf-8'))
+    projections = list(meta.get('close_projections', []))
+    raw_projections = list(raw.get('close_projections', []))
+    expected = set(meta['expected_sessions'])
+    covered_end = date.fromisoformat(meta['requested_end'])
+    for _, snapshot, price in sorted(prices, key=lambda item: item[2]['requested_start']):
+        if (price['symbol'], price['source']) != (meta['symbol'], meta['source']):
+            raise ValueError('close projection route mismatch')
+        _verify_price_snapshot(snapshot)
+        first = date.fromisoformat(price['requested_start'])
+        last = date.fromisoformat(price['requested_end'])
+        day = covered_end + timedelta(days=1)
+        context = price.get('calendar_context')
+        if context and date.fromisoformat(context['requested_start']) <= day:
+            bridge = {session for session in context['expected_sessions']
+                      if covered_end.isoformat() < session < first.isoformat()}
+            if bridge - set(closes):
+                raise ValueError('close projection calendar gap: ' + ','.join(sorted(bridge - set(closes))))
+        else:
+            # Compatibility for old verified manifests without calendar context:
+            # only a pure weekend bridge is known independently to be closed.
+            while day < first:
+                if day.weekday() < 5:
+                    raise ValueError(f'close projection calendar gap on {day.isoformat()}')
+                day += timedelta(days=1)
+        rows = []
+        for bar in read_bars(snapshot / 'bars.csv'):
+            day_text = bar.day.isoformat()
+            if day_text in closes and closes[day_text] != bar.close:
+                raise ValueError(f'overlapping close rows differ on {day_text}')
+            # A daily tail must not claim unvalidated new historical prefix.
+            if day_text < meta['first_date']:
+                continue
+            closes[day_text] = bar.close
+            rows.append([day_text, bar.close])
+        expected.update(day for day in price['expected_sessions'] if day >= meta['first_date'])
+        covered_end = max(covered_end, last)
+        evidence = {'dataset_id': price['dataset_id'], 'source': price['source'],
+                    'symbol': price['symbol'], 'sha256': price['sha256'],
+                    'calendar_sha256': price['calendar_sha256'],
+                    'requested_start': price['requested_start'], 'requested_end': price['requested_end']}
+        projections.append(evidence)
+        raw_projections.append({**evidence, 'rows': rows, 'fields': ['Date', 'Close']})
+    if expected != set(closes):
+        raise ValueError('close projection coverage gap')
+    with (target / 'close.csv').open('w', encoding='utf-8', newline='') as handle:
+        writer = csv.writer(handle, lineterminator='\n')
+        writer.writerow(['Date', 'Close'])
+        writer.writerows((day, format(closes[day], '.15g')) for day in sorted(closes))
+    raw['close_projections'] = raw_projections
+    (target / 'raw-bars.json').write_bytes(_json_bytes(raw))
+    meta.update(last_date=max(closes), row_count=len(closes), requested_end=covered_end.isoformat(),
+                expected_sessions=sorted(expected), close_projections=projections,
+                files={name: _sha256(target / name) for name in ('close.csv', 'raw-bars.json')})
+    meta['dataset_id'] = dataset_identity(meta)
+    (target / 'manifest.json').write_bytes(_json_bytes(meta))
+    verify_close_history(target)
+
+
 def _merge_valuation_snapshots(
     snapshots: list[tuple[str, Path, dict]],
     target: Path,
@@ -450,6 +554,10 @@ def materialize_cumulative(root: Path, output_dir: Path) -> dict[str, Any]:
                 _merge_valuation_snapshots(snapshots, working)
             else:
                 raise ValueError(f"unknown data class: {data_class}")
+            if data_class == "normalized_close":
+                prices = grouped.get((route[0], route[1], "normalized_price"), [])
+                if prices:
+                    _extend_close_from_prices(working, prices)
             raw = (working / "manifest.json").read_bytes()
             cache_name = hashlib.sha256(raw).hexdigest()
             meta = json.loads(raw)
@@ -540,6 +648,17 @@ def _verify_price_snapshot(path: Path) -> dict[str, Any]:
         raise ValueError("price snapshot metadata coverage mismatch")
     requested_start = date.fromisoformat(meta["requested_start"])
     requested_end = date.fromisoformat(meta["requested_end"])
+    context = meta.get('calendar_context')
+    if context is not None:
+        context_start = date.fromisoformat(context['requested_start'])
+        context_end = date.fromisoformat(context['requested_end'])
+        context_days = [date.fromisoformat(day) for day in context['expected_sessions']]
+        if (context.get('source_id') != 'szse_calendar'
+                or context_start > requested_start or context_end < requested_end
+                or context_days != sorted(set(context_days))
+                or any(not context_start <= day <= context_end for day in context_days)
+                or [day for day in context_days if requested_start <= day <= requested_end] != calendar):
+            raise ValueError('price snapshot calendar context mismatch')
     if any(not requested_start <= day <= requested_end for day in calendar):
         raise ValueError("price snapshot calendar is outside the requested range")
     return meta
@@ -653,4 +772,76 @@ def build_cumulative(
         raise ValueError("cumulative privacy check failed: " + "; ".join(findings))
     verify_cumulative(staging)
     os.replace(staging, output_dir)
+    return manifest
+
+
+def revise_cumulative(*, previous_dir: Path, repair_dir: Path, output_dir: Path,
+                      as_of: str, previous_release: str, previous_archive_sha256: str,
+                      root: Path | None = None) -> dict[str, Any]:
+    """Append missing same-session routes without replacing any prior dataset.
+
+    This is an explicit immutable release revision, never a new dated batch.
+    The caller supplies the checked predecessor archive hash and release tag.
+    Materialization must pass before the revised tree becomes visible.
+    """
+    as_of = date.fromisoformat(as_of).isoformat()
+    if (not re.fullmatch(r'data-' + re.escape(as_of) + r'-r[1-9][0-9]*', previous_release)
+            or not re.fullmatch(r'[0-9a-f]{64}', previous_archive_sha256)):
+        raise ValueError('revision must pin a same-session predecessor and archive hash')
+    previous_dir, repair_dir, output_dir = map(lambda path: Path(path).resolve(),
+                                              (previous_dir, repair_dir, output_dir))
+    previous = verify_cumulative(previous_dir)
+    if previous['as_of'] != as_of:
+        raise ValueError('revision session must match previous cumulative session')
+    if output_dir.exists():
+        raise FileExistsError('revision output already exists')
+    verified = verify_delta_tree(repair_dir)
+    if verified['normalized_close'] or verified['valuation_observation']:
+        raise ValueError('source repair accepts only normalized price snapshots')
+    catalog_root = Path(root).resolve() if root is not None else Path(__file__).resolve().parents[2]
+    catalog = json.loads((catalog_root / 'catalog/datasets.json').read_text())
+    instruments = json.loads((catalog_root / 'catalog/instruments.json').read_text())
+    watchlist = json.loads((catalog_root / 'catalog/watchlist.json').read_text())
+    allowed_routes = {
+        (instruments[catalog[name]['instrument']]['symbol'], catalog[name]['source'], catalog[name]['data_class'])
+        for name in watchlist.get('additional_price_datasets', [])
+        if instruments[catalog[name]['instrument']]['symbol'] in watchlist['symbols']
+    }
+    repair_snapshots = sorted(repair_dir.rglob('manifest.json'))
+    for path in repair_snapshots:
+        meta = json.loads(path.read_text(encoding='utf-8'))
+        route = (meta.get('symbol'), meta.get('source'), meta.get('data_class'))
+        if (meta.get('source') != 'sina_raw' or meta.get('last_date') != as_of
+                or route not in allowed_routes):
+            raise ValueError('source repair must contain registered current independent Sina prices')
+    # The latest batch must not already own any repaired route. Never overwrite
+    # or duplicate a snapshot within that batch, even when the rows agree.
+    latest = previous['batches'][-1]
+    existing = _batch_snapshots(previous_dir, [latest])
+    incoming = _batch_snapshots(repair_dir, [{'as_of': as_of, 'path': '.'}])
+    if set(existing) & set(incoming):
+        raise ValueError('source repair contains a duplicate route in the current batch')
+    repair_pin = hashlib.sha256(_json_bytes(_files(repair_dir))).hexdigest()
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.cumulative-revision-', dir=output_dir.parent) as temp:
+        staging = Path(temp) / 'tree'
+        _copy_tree(previous_dir, staging)
+        target = staging / latest['path'] / 'repairs' / repair_pin
+        _copy_tree(repair_dir, target)
+        manifest = dict(previous)
+        manifest.update(previous_release=previous_release, previous_archive_sha256=previous_archive_sha256,
+                        generated_at=datetime.now(timezone.utc).isoformat())
+        manifest['revisions'] = [*previous.get('revisions', []), {
+            'as_of': as_of, 'previous_release': previous_release,
+            'previous_archive_sha256': previous_archive_sha256,
+            'repair_path': target.relative_to(staging).as_posix(),
+            'added_routes': [list(route) for route in sorted(incoming)],
+        }]
+        manifest['files'] = _files(staging)
+        (staging / MANIFEST_NAME).write_bytes(_json_bytes(manifest))
+        verify_cumulative(staging)
+        if scan_privacy(staging):
+            raise ValueError('cumulative revision privacy check failed')
+        materialize_cumulative(staging, Path(temp) / 'materialized')
+        os.replace(staging, output_dir)
     return manifest

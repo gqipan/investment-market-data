@@ -252,7 +252,9 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
     symbol = instrument.get("provider_symbols", {}).get(provider)
     if not symbol:
         raise ValueError("index provider symbol is not explicitly registered")
-    sessions = fetch_calendar(first, last, request=request)
+    context_start = first.replace(day=1)
+    context_sessions = fetch_calendar(context_start, last, request=request)
+    sessions = [day for day in context_sessions if day >= first]
     library_version = None
     ignored_closed_observations: list[date] = []
     if provider == "tencent_raw":
@@ -293,6 +295,11 @@ def collect_index(*, root: Path, dataset_name: str, start: str, end: str,
                 day.isoformat() for day in ignored_closed_observations
             ],
             "volume_unit": source["volume_unit"], "library_version": library_version,
+            "calendar_context": {
+                "source_id": "szse_calendar", "requested_start": context_start.isoformat(),
+                "requested_end": end,
+                "expected_sessions": [day.isoformat() for day in context_sessions],
+            },
             "calendar_id": "szse-month-calendar", "calendar_source_url": CALENDAR_URL,
             "calendar_source_id": "szse_calendar",
             "requested_start": start, "requested_end": end,
