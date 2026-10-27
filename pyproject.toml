@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "investment-market-data"
-version = "0.1.3"
+version = "0.1.4"
 description = "Auditable market-data packaging and release tooling"
 readme = "README.md"
 requires-python = ">=3.11"

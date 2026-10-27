@@ -80,6 +80,22 @@ class ReleaseWindowTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "upper bound"):
             next_release_window("2026-10-23", "not-a-date", request=calendar_request)
 
+    def test_route_status_keeps_failed_sina_independent_and_close_requires_projection(self):
+        from market_data.release_window import validate_current_coverage
+        report = {'requested_end': '2026-10-26', 'indices': [
+            {'symbol': '000922', 'price': {'status': 'available', 'source': 'tencent_raw',
+                'last_date': '2026-10-26', 'coverage_verified': True}, 'additional_prices': []},
+            {'symbol': '000300', 'price': {'status': 'available', 'source': 'tencent_raw',
+                'last_date': '2026-10-26', 'coverage_verified': True},
+             'additional_prices': [{'status': 'unavailable', 'source': 'sina_raw', 'reason_code': 'source_unavailable'}]}]}
+        result = validate_current_coverage(report, expected_symbols={'000922', '000300'},
+            expected_routes={('000922', 'tencent_raw', 'normalized_close'), ('000300', 'sina_raw', 'normalized_price')})
+        self.assertEqual(result['status'], 'pass')
+        routes = {(row['symbol'], row['source'], row['data_class']): row for row in result['routes']}
+        self.assertEqual(routes[('000922', 'tencent_raw', 'normalized_close')]['status'], 'requires_close_projection')
+        self.assertEqual(routes[('000300', 'sina_raw', 'normalized_price')]['status'], 'retain_previous')
+        self.assertEqual(routes[('000300', 'sina_raw', 'normalized_price')]['reason_code'], 'source_unavailable')
+
     def test_established_symbols_must_all_reach_target(self):
         from market_data.release_window import validate_current_coverage
 

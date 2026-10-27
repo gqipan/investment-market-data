@@ -69,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("--start", required=True)
     history.add_argument("--end", required=True)
     history.add_argument("--output", required=True, type=Path)
+    history.add_argument("--previous-registry", type=Path, help="verified previous materialized registry for per-source catch-up")
     history.add_argument("--include-csindex", action="store_true", help="explicit optional CSI API peg observations; keep separate methods")
     history.add_argument(
         "--allow-partial",
@@ -86,6 +87,23 @@ def build_parser() -> argparse.ArgumentParser:
     cumulative.add_argument("--previous-dir", type=Path)
     cumulative.add_argument("--previous-release")
     cumulative.add_argument("--previous-archive-sha256")
+
+    repair = subcommands.add_parser('repair-additional-prices',
+        help='retry lagging independent Sina routes within the current release session')
+    repair.add_argument('--root', type=Path, default=_default_root())
+    repair.add_argument('--previous-registry', required=True, type=Path)
+    repair.add_argument('--as-of', required=True)
+    repair.add_argument('--output', required=True, type=Path)
+
+    revision = subcommands.add_parser('revise-cumulative',
+        help='build an immutable same-session revision containing only missing Sina routes')
+    revision.add_argument('--root', type=Path, default=_default_root())
+    revision.add_argument('--previous-dir', required=True, type=Path)
+    revision.add_argument('--repair-dir', required=True, type=Path)
+    revision.add_argument('--output-dir', required=True, type=Path)
+    revision.add_argument('--as-of', required=True)
+    revision.add_argument('--previous-release', required=True)
+    revision.add_argument('--previous-archive-sha256', required=True)
 
     materialize = subcommands.add_parser(
         "materialize-cumulative",
@@ -241,7 +259,7 @@ def _run(args: argparse.Namespace) -> int:
         return 0
     if args.command == "backfill":
         from .history import backfill
-        report = backfill(root=args.root, start=args.start, end=args.end, output=args.output, include_csindex=args.include_csindex,
+        report = backfill(root=args.root, start=args.start, end=args.end, output=args.output, include_csindex=args.include_csindex, previous_registry=args.previous_registry,
             progress=lambda code, result: print(f"{code}: price={result['price']['status']}; missing daily valuation={','.join(result['missing_daily_history'])}", file=sys.stderr))
         print(json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False))
         return 0 if report["status"] == "complete" or args.allow_partial else 1
@@ -259,6 +277,19 @@ def _run(args: argparse.Namespace) -> int:
             previous_release=args.previous_release,
             previous_archive_sha256=args.previous_archive_sha256,
         )
+        print(json.dumps(manifest, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0
+    if args.command == 'repair-additional-prices':
+        from .history import repair_additional_prices
+        report = repair_additional_prices(root=args.root, previous_registry=args.previous_registry,
+            as_of=args.as_of, output=args.output)
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False))
+        return 0
+    if args.command == 'revise-cumulative':
+        from .cumulative import revise_cumulative
+        manifest = revise_cumulative(root=args.root, previous_dir=args.previous_dir, repair_dir=args.repair_dir,
+            output_dir=args.output_dir, as_of=args.as_of, previous_release=args.previous_release,
+            previous_archive_sha256=args.previous_archive_sha256)
         print(json.dumps(manifest, ensure_ascii=False, sort_keys=True, allow_nan=False))
         return 0
     if args.command == "materialize-cumulative":
