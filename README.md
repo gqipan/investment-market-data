@@ -111,7 +111,7 @@ PYTHONPATH=src python -m market_data verify-release \
 - 完整 OHLCV：`stage-release` / `fetch-release`，生成国内研究 CLI 所需的 `market=A` 兼容缓存。
 - 独立收盘价与估值：`stage-snapshot-release` / `fetch-snapshot-release`，原样保留 schema、来源、方法、单位和频率。
 
-调用方必须锁定不可变 tag、清单哈希、数据集 ID 和数据类型。`shadow-check` 对照固定行情缓存，默认要求至少 900 个交易日；六日验收样本不能当作 850 日均线历史。私人登记可为已证实的新指数标注首个官方日期，研究读取只在该序列从官方起点完整覆盖时豁免行数下限，生产 MA850 路由仍要求真实 850 行。数据仓库命令本身不切换生产指针或写业务数据库。私人 `grid_trading` 已另外实现五个交易日跨来源对照、显式生效路由、趋势页自动选源与一键回退，详见[消费端接入契约](docs/consumer-integration.md)。
+调用方必须锁定不可变 tag、清单哈希、数据集 ID 和数据类型。`shadow-check` 对照固定行情缓存，默认要求至少 900 个交易日；六日验收样本不能当作 850 日均线历史。私人登记可为已证实的新指数标注首个官方日期，研究读取只在该序列从官方起点完整覆盖时豁免行数下限，生产 MA850 路由仍要求真实 850 行。数据仓库命令本身不切换生产指针或写业务数据库。消费命令与边界见[消费端接入契约](docs/consumer-integration.md)。
 
 ## 发布边界
 
