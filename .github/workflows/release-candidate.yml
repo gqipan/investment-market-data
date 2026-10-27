@@ -17,6 +17,10 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+      - name: Check actual Git objects
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path . --repository --staged
       - name: Tests
         env:
           PYTHONPATH: src
@@ -42,6 +46,10 @@ jobs:
         run: >-
           python -m market_data verify-release
           --release-dir dist/data-2026-10-22-fixture-r1
+      - name: Privacy check final candidate before upload
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path dist/data-2026-10-22-fixture-r1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: synthetic-release-candidate

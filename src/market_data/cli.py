@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -55,6 +56,20 @@ def build_parser() -> argparse.ArgumentParser:
     privacy = subcommands.add_parser("privacy-check", help="scan text files for private data")
     privacy.add_argument("--path", type=Path, default=Path("."))
     privacy.add_argument("--repository", action="store_true", help="also enforce the Git file publication allowlist")
+    privacy.add_argument("--staged", action="store_true", help="scan actual Git index bytes")
+    privacy.add_argument("--commit-range", help="scan introduced commits (hash..hash or HEAD)")
+    privacy.add_argument("--terms-file", type=Path,
+                         default=os.environ.get("MARKET_DATA_PRIVATE_TERMS_FILE"),
+                         help="optional private deny terms outside the repository")
+    privacy.add_argument("--text-file", type=Path, help="check a local PR or Release text before publishing")
+
+    publication = subcommands.add_parser("prepare-publication", help="prepare and privacy-check exact daily attachments")
+    publication.add_argument("--delta-dir", type=Path, required=True)
+    publication.add_argument("--cumulative-dir", type=Path, required=True)
+    publication.add_argument("--as-of", required=True)
+    publication.add_argument("--output-dir", type=Path, required=True)
+    publication.add_argument("--terms-file", type=Path,
+                             default=os.environ.get("MARKET_DATA_PRIVATE_TERMS_FILE"))
 
     collect = subcommands.add_parser("collect", help="collect a local raw index price snapshot")
     collect.add_argument("--root", type=Path, default=_default_root())
@@ -242,10 +257,32 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
+    if args.command == "prepare-publication":
+        from .publication import prepare_publication
+        from .privacy_git import load_private_terms
+        prepare_publication(delta_dir=args.delta_dir, cumulative_dir=args.cumulative_dir,
+            as_of=args.as_of, output_dir=args.output_dir,
+            private_terms=load_private_terms(args.terms_file, _default_root()))
+        print("publication attachments verified")
+        return 0
     if args.command == "privacy-check":
+        from .privacy_git import load_private_terms, scan_commits, scan_index, scan_worktree
+        from .privacy import scan_bytes
+        terms = load_private_terms(args.terms_file, args.path.resolve())
         if args.repository:
             check_repository_files(args.path.resolve())
-        findings = scan_privacy(args.path.resolve())
+        if args.staged:
+            findings = scan_index(args.path.resolve(), private_terms=terms)
+        elif args.repository:
+            findings = scan_worktree(args.path.resolve(), private_terms=terms)
+        else:
+            findings = scan_privacy(args.path.resolve(), private_terms=terms)
+        if args.commit_range:
+            findings.extend(scan_commits(args.path.resolve(), args.commit_range, private_terms=terms))
+        if args.text_file:
+            if args.text_file.stat().st_size > 50 * 1024 * 1024:
+                raise ValueError("publication text exceeds privacy scan limit")
+            findings.extend(scan_bytes("publication.txt", args.text_file.read_bytes(), private_terms=terms))
         if findings:
             print("\n".join(findings), file=sys.stderr)
             return 1

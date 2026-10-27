@@ -19,9 +19,30 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+      - name: Staged objects and introduced commit privacy
+        env:
+          PYTHONPATH: src
+          PRIVACY_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          PRIVACY_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          PRIVACY_EVENT: ${{ github.event_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [ "${PRIVACY_EVENT}" = "push" ] || [ "${PRIVACY_EVENT}" = "pull_request" ]; then
+            if [ -n "${PRIVACY_BASE}" ] && [ "${PRIVACY_BASE}" != "0000000000000000000000000000000000000000" ]; then
+              REVISION_RANGE="${PRIVACY_BASE}..${PRIVACY_HEAD}"
+            else
+              BASE_COMMIT="$(git merge-base "${PRIVACY_HEAD}" "origin/${DEFAULT_BRANCH}")"
+              REVISION_RANGE="${BASE_COMMIT}..${PRIVACY_HEAD}"
+            fi
+            python -m market_data privacy-check --path . --repository --staged --commit-range "${REVISION_RANGE}"
+          else
+            python -m market_data privacy-check --path . --repository --staged
+          fi
       - name: Unit tests
         env:
           PYTHONPATH: src
@@ -67,6 +88,10 @@ jobs:
           print("release_manifest_sha256=" + manifest_pin)
           print("dataset_id=" + dataset_pin)
           PY
+      - name: Verify final synthetic artifacts before upload
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path dist/candidates/data-2026-10-22-fixture-r1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: synthetic-release-candidate
@@ -77,6 +102,10 @@ jobs:
         env:
           PYTHONPATH: src
         run: python -m market_data catalog-report --root . --output-dir dist/catalog
+      - name: Verify catalog artifact before upload
+        env:
+          PYTHONPATH: src
+        run: python -m market_data privacy-check --path dist/catalog
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: catalog-report

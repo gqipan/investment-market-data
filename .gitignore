@@ -9,3 +9,17 @@ dist/
 data/
 *.log
 .DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+.ssh/
+.aws/
+.gnupg/
+.credentials/
+credentials.json
+secrets.json
+privacy-terms.local.txt
+private-evidence/

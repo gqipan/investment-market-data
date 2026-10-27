@@ -9,7 +9,7 @@ import subprocess
 
 
 REPOSITORY_FILES = (
-    "README.md", "LICENSE", "DATA_POLICY.md", ".gitignore", "pyproject.toml",
+    "README.md", "LICENSE", "DATA_POLICY.md", "AGENTS.md", ".gitignore", "pyproject.toml",
     "src/market_data/*.py", "tests/test_*.py", "catalog/*.json",
     "fixtures/csi300-demo-*.csv", "docs/*.md", "docs/**/*.md",
     ".github/workflows/*.yml",
@@ -31,9 +31,9 @@ def check_repository_files(root: Path) -> None:
     names = _git(root, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
     for name in names.split("\0"):
         if name and not any(fnmatchcase(name, pattern) for pattern in REPOSITORY_FILES):
-            raise ValueError(f"repository file is outside the publication allowlist: {name}")
+            raise ValueError("repository file is outside the publication allowlist")
         if name and (root / name).is_symlink():
-            raise ValueError(f"repository symlink is not allowed: {name}")
+            raise ValueError("repository symlink is not allowed")
 
 
 def check_code_commit(root: Path, commit: str) -> None:
