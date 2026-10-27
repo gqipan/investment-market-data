@@ -14,7 +14,7 @@ from .release import _sha256, _write_reproducible_tar
 PAYLOAD_FILES = {
     'manifest.json', 'bars.csv', 'calendar.csv', 'close.csv', 'raw-bars.json',
     'observations.csv', 'raw.json', 'coverage-report.json', 'coverage-report.md',
-    'route-coverage.json', 'cumulative-manifest.json', 'registry.json',
+    'route-coverage.json', 'cumulative-manifest.json', 'registry.json', 'h30269-addition-report.json',
 }
 
 

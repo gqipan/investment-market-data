@@ -78,6 +78,23 @@ class PublicationTests(unittest.TestCase):
             publication.prepare_publication(delta_dir=self.delta, cumulative_dir=self.cumulative,
                 as_of='2026-10-26', output_dir=self.root / 'second-upload')
 
+    def test_cumulative_addition_report_is_allowed_and_scanned(self):
+        report = self.cumulative / 'h30269-addition-report.json'
+        report.write_text('{"status":"partial"}')
+        manifest_path = self.cumulative / 'cumulative-manifest.json'
+        manifest = json.loads(manifest_path.read_text())
+        data = report.read_bytes()
+        manifest['files'].append({'path': report.name, 'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data)})
+        manifest_path.write_text(json.dumps(manifest))
+        self.assertTrue(self.prepare().is_dir())
+        report.write_text('{"holdings":[1]}')
+        data = report.read_bytes()
+        manifest['files'][-1].update(sha256=hashlib.sha256(data).hexdigest(), size=len(data))
+        manifest_path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'privacy'):
+            publication.prepare_publication(delta_dir=self.delta, cumulative_dir=self.cumulative,
+                as_of='2026-10-26', output_dir=self.root / 'second-upload')
+
     def test_symlink_is_rejected_before_packaging(self):
         (self.delta / 'linked').symlink_to(self.root, target_is_directory=True)
         with self.assertRaisesRegex(ValueError, 'symlink'):
