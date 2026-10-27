@@ -22,7 +22,17 @@ class CatalogTests(unittest.TestCase):
     def test_current_catalog_tracks_selected_indices(self) -> None:
         counts = validate_catalog(ROOT)
         self.assertEqual(counts["tracked"], 13)
-        self.assertEqual(counts["datasets"], 27)
+        self.assertEqual(counts["datasets"], 33)
+
+    def test_additional_price_names_must_resolve_to_price_datasets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = self._copy_catalog(temp)
+            path = root / "catalog/watchlist.json"
+            watchlist = json.loads(path.read_text())
+            watchlist["additional_price_datasets"] = ["csi300-valuation-v1"]
+            path.write_text(json.dumps(watchlist))
+            with self.assertRaisesRegex(ValueError, "additional price"):
+                validate_catalog(root)
 
     def test_report_contains_no_market_data_and_all_selected_symbols(self) -> None:
         report = build_catalog_report(ROOT)

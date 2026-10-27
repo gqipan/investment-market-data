@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import copy
 import csv
 import math
@@ -380,7 +380,8 @@ def _error(exc):
 
 
 def backfill(*, root: Path, start: str, end: str, output: Path, request=request_json,
-             legu_fetch=fetch_legu, price_fetch=collect_history_price, progress=None, include_csindex=False) -> dict:
+             legu_fetch=fetch_legu, price_fetch=collect_history_price, progress=None,
+             include_csindex=False, previous_registry: Path | None = None) -> dict:
     root = root.resolve()
     output = _output_path(root, output)
     first, last = date.fromisoformat(start), date.fromisoformat(end)
@@ -395,8 +396,30 @@ def backfill(*, root: Path, start: str, end: str, output: Path, request=request_
         _local_gate(sources, 'csindex_optional_history')
     instruments = json.loads((root / 'catalog/instruments.json').read_text())
     datasets = json.loads((root / 'catalog/datasets.json').read_text())
-    watchlist = json.loads((root / 'catalog/watchlist.json').read_text())['symbols']
+    watchlist_config = json.loads((root / 'catalog/watchlist.json').read_text())
+    watchlist = watchlist_config['symbols']
+    additional = watchlist_config.get('additional_price_datasets', [])
+    if len(additional) != len(set(additional)):
+        raise ValueError('duplicate additional price dataset')
+    for name in additional:
+        dataset = datasets.get(name, {})
+        if dataset.get('data_class') != 'normalized_price' or dataset.get('instrument') not in instruments:
+            raise ValueError('unknown additional price dataset: ' + name)
+        if instruments[dataset['instrument']]['symbol'] not in watchlist:
+            raise ValueError('additional price dataset is outside watchlist: ' + name)
     selected = [(key, item) for key, item in instruments.items() if item['symbol'] in watchlist]
+    previous_tails = {}
+    if previous_registry is not None:
+        from .cumulative import _verify_price_snapshot, verify_registry_cache
+        previous_registry = Path(previous_registry).resolve()
+        verify_registry_cache(previous_registry.parent, previous_registry)
+        registry = json.loads(previous_registry.read_text())
+        for entry in registry['datasets']:
+            if entry['data_class'] != 'normalized_price':
+                continue
+            manifest = previous_registry.parent / entry['cache_name'] / 'manifest.json'
+            meta = _verify_price_snapshot(manifest.parent)
+            previous_tails[(entry['symbol'], entry['source'])] = meta['last_date']
     output.mkdir(parents=True)
     cached = HistoricalCalendarRequest(
         CachedRequest(output / 'request-cache', request),
@@ -423,14 +446,38 @@ def backfill(*, root: Path, start: str, end: str, output: Path, request=request_
     def one(selected_item):
         instrument_id, item = selected_item
         code = item['symbol']
-        result = {'symbol': code, 'name': item['display_name'], 'valuations': []}
+        result = {'symbol': code, 'name': item['display_name'], 'valuations': [], 'additional_prices': []}
         dataset_name = next(key for key, ds in datasets.items()
-                            if ds['instrument'] == instrument_id and ds['data_class'] == 'normalized_price')
+                            if ds['instrument'] == instrument_id and ds['data_class'] == 'normalized_price'
+                            and key not in additional)
         try:
             result['price'] = price_fetch(root=root, dataset_name=dataset_name, start=start, end=end,
                                            output=output / code / 'price', request=cached)
         except (ValueError, KeyError, TypeError, OSError) as exc:
             result['price'] = _error(exc)
+        for additional_name in additional:
+            dataset = datasets[additional_name]
+            if dataset['instrument'] != instrument_id:
+                continue
+            provider = dataset['source']
+            tail = previous_tails.get((code, provider))
+            route_start = min(start, (date.fromisoformat(tail) + timedelta(days=1)).isoformat()) if tail else start
+            detail = {'dataset_name': additional_name, 'source': provider,
+                      'requested_start': route_start, 'requested_end': end}
+            try:
+                # Explicit independent route: never retry through another provider.
+                _local_gate(sources, provider)
+                path = collect_index(root=root, dataset_name=additional_name, provider=provider,
+                    start=route_start, end=end, output=output / code / 'additional_prices' / additional_name,
+                    request=cached)
+                meta = json.loads((path / 'manifest.json').read_text())
+                detail.update(status='available', path=str(path.relative_to(output)),
+                    first_date=meta['first_date'], last_date=meta['last_date'],
+                    row_count=meta['row_count'], coverage_verified=meta['coverage_verified'],
+                    requested_range_complete=True, dataset_id=meta['dataset_id'])
+            except (ValueError, KeyError, TypeError, OSError) as exc:
+                detail.update(_error(exc))
+            result['additional_prices'].append(detail)
         legu_symbol = item['provider_symbols'].get('akshare_legulegu')
         if legu_symbol:
             try:
@@ -495,7 +542,13 @@ def backfill(*, root: Path, start: str, end: str, output: Path, request=request_
             report['indices'].append(result)
             # Checkpoint successful siblings even when a later provider is slow.
             _save_report(output, report)
-    if report['indices'] and all(row['price'].get('status') == 'available' and row['price'].get('requested_range_complete') and not row['missing_daily_history'] for row in report['indices']):
+    if report['indices'] and all(
+        row['price'].get('status') == 'available'
+        and row['price'].get('requested_range_complete')
+        and not row['missing_daily_history']
+        and all(extra.get('status') == 'available' for extra in row['additional_prices'])
+        for row in report['indices']
+    ):
         report['status'] = 'complete'
     _save_report(output, report)
     return report
@@ -522,4 +575,76 @@ def _save_report(output: Path, report: dict):
                                       f"{meta['first_date']} .. {meta['last_date']}; {meta['frequency']}")
             cells.append('<br>'.join(values) or 'unavailable')
         lines.append('| ' + ' | '.join([item['symbol'] + ' ' + item['name'], price_text, *cells]) + ' |')
+    for item in report['indices']:
+        for extra in item.get('additional_prices', []):
+            lines.append(f"\nAdditional price {item['symbol']}/{extra['source']}/{extra['dataset_name']}: "
+                         + (f"{extra['row_count']} rows; {extra['first_date']} .. {extra['last_date']}"
+                            if extra['status'] == 'available' else extra.get('reason_code', extra['status'])))
     (output / 'coverage-report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+
+
+def repair_additional_prices(*, root: Path, previous_registry: Path, as_of: str,
+                             output: Path, request=request_json) -> dict:
+    """Retry lagging registered Sina routes even without a new global session."""
+    from .cumulative import _verify_price_snapshot, verify_registry_cache
+
+    root = Path(root).resolve()
+    output = _output_path(root, Path(output))
+    as_of = date.fromisoformat(as_of).isoformat()
+    if output.exists():
+        raise FileExistsError('source repair output already exists')
+    previous_registry = Path(previous_registry).resolve()
+    verify_registry_cache(previous_registry.parent, previous_registry)
+    registry = json.loads(previous_registry.read_text(encoding='utf-8'))
+    if registry.get('expected_session') != as_of:
+        raise ValueError('source repair must target the current registry session')
+    datasets = json.loads((root / 'catalog/datasets.json').read_text())
+    instruments = json.loads((root / 'catalog/instruments.json').read_text())
+    sources = json.loads((root / 'catalog/sources.json').read_text())
+    watchlist = json.loads((root / 'catalog/watchlist.json').read_text())
+    tails = {}
+    for entry in registry['datasets']:
+        if entry['data_class'] == 'normalized_price':
+            meta = _verify_price_snapshot(previous_registry.parent / entry['cache_name'])
+            tails[(entry['symbol'], entry['source'])] = meta['last_date']
+    report = {'schema_version': 'additional-price-repair-1', 'status': 'noop',
+              'requested_start': as_of, 'requested_end': as_of, 'added': 0, 'indices': [],
+              'generated_at': datetime.now(timezone.utc).isoformat()}
+    output.mkdir(parents=True)
+    cached = HistoricalCalendarRequest(CachedRequest(output / 'request-cache', request), min_interval=0.25)
+    for name in watchlist.get('additional_price_datasets', []):
+        dataset = datasets[name]
+        instrument = instruments[dataset['instrument']]
+        source, symbol = dataset['source'], instrument['symbol']
+        if (source != 'sina_raw' or dataset['data_class'] != 'normalized_price'
+                or symbol not in watchlist['symbols']):
+            raise ValueError('repair accepts only registered watchlist Sina price routes')
+        tail = tails.get((symbol, source))
+        detail = {'dataset_name': name, 'source': source, 'status': 'unchanged',
+                  'last_date': tail}
+        if tail is None or tail < as_of:
+            start = (date.fromisoformat(tail) + timedelta(days=1)).isoformat() if tail else as_of
+            detail.update(requested_start=start, requested_end=as_of)
+            try:
+                _local_gate(sources, source)
+                path = collect_index(root=root, dataset_name=name, provider=source, start=start, end=as_of,
+                    output=output / symbol / 'additional_prices' / name, request=cached)
+                meta = _verify_price_snapshot(path)
+                if meta['last_date'] != as_of:
+                    raise ValueError('source repair did not reach target session')
+                detail.update(status='available', row_count=meta['row_count'],
+                              first_date=meta['first_date'], last_date=meta['last_date'],
+                              dataset_id=meta['dataset_id'])
+                report['added'] += 1
+            except (OSError, ValueError, TypeError, KeyError) as exc:
+                detail.update(_error(exc))
+        report['indices'].append({'symbol': symbol, 'additional_prices': [detail]})
+    report['status'] = 'available' if report['added'] else 'noop'
+    (output / 'coverage-report.json').write_bytes(_json_bytes(report))
+    lines = ['# Same-session independent source repair', '', f'Target: {as_of}; added routes: {report["added"]}', '']
+    for row in report['indices']:
+        for detail in row['additional_prices']:
+            lines.append(f"{row['symbol']}/{detail['source']}: {detail['status']}; "
+                         f"through {detail.get('last_date')}; {detail.get('reason_code', '')}")
+    (output / 'coverage-report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    return report

@@ -224,6 +224,22 @@ def validate_catalog(root: Path) -> dict[str, int]:
             "catalog/watchlist.json required_data_classes must be a non-empty string list"
         )
 
+    additional = watchlist.get("additional_price_datasets", [])
+    if (not isinstance(additional, list) or not all(isinstance(name, str) for name in additional)
+            or len(additional) != len(set(additional))):
+        raise ValueError("additional price datasets must be a unique string list")
+    additional_routes = set()
+    for name in additional:
+        dataset = datasets.get(name, {})
+        if dataset.get('data_class') != 'normalized_price':
+            raise ValueError('unknown additional price dataset: ' + name)
+        instrument = instruments[dataset['instrument']]
+        route = (instrument['symbol'], dataset['source'])
+        if (instrument['symbol'] not in tracked_symbols or route in additional_routes
+                or not instrument.get('provider_symbols', {}).get(dataset['source'])):
+            raise ValueError('invalid additional price route: ' + name)
+        additional_routes.add(route)
+
     instruments_by_symbol = {
         instrument["symbol"]: instrument_id
         for instrument_id, instrument in instruments.items()
@@ -280,7 +296,8 @@ def build_catalog_report(root: Path) -> dict[str, Any]:
             "canonical_id": instrument["canonical_id"],
         }
         for data_class in watchlist["required_data_classes"]:
-            dataset_ids = by_instrument_class.get((instrument_id, data_class), [])
+            dataset_ids = [name for name in by_instrument_class.get((instrument_id, data_class), [])
+                           if name not in watchlist.get('additional_price_datasets', [])]
             if len(dataset_ids) != 1:
                 raise ValueError(
                     f"{instrument_id} must have exactly one {data_class} dataset"
